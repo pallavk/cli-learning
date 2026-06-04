@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vim Field Guide</title>
+<style>
+  :root {
+    --bg: #1a1b1e;
+    --panel: #232428;
+    --panel-2: #2b2d31;
+    --border: #3a3c42;
+    --text: #e4e4e7;
+    --muted: #9a9ba1;
+    --accent: #5bc8af;
+    --accent-dim: rgba(91, 200, 175, 0.14);
+    --key-bg: #15161a;
+    --good: #5bc8af;
+    --bad: #e07a6b;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 28px; }
+  h1 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    letter-spacing: -0.5px;
+    font-weight: 650;
+  }
+  h1 .dot { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0; font-size: 15px; }
+  .prefix-note {
+    margin-top: 18px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .prefix-note strong { color: var(--accent); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin: 28px 0 0; flex-wrap: wrap; }
+  .tab {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 550;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: color .15s, background .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); background: var(--panel); }
+  .panel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 8px 22px 22px;
+  }
+  .panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2.section-title { font-size: 17px; margin: 22px 0 4px; font-weight: 600; }
+  h2.section-title:first-child { margin-top: 16px; }
+  .section-desc { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.keys { white-space: nowrap; width: 1%; }
+  td.desc { color: var(--text); }
+
+  kbd {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    color: var(--accent);
+    display: inline-block;
+    line-height: 1.5;
+  }
+  .seq { color: var(--muted); margin: 0 3px; font-size: 12px; }
+  code.cmd {
+    font-family: var(--mono);
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+    color: #d8b4fe;
+  }
+  .callout {
+    background: var(--panel-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .callout b { color: var(--text); }
+
+  /* Quiz */
+  .quiz-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .progress-line { color: var(--muted); font-size: 14px; }
+  .score-pill {
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .q-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    margin-top: 18px;
+  }
+  .q-num { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+  .q-text { font-size: 17px; margin: 8px 0 18px; }
+  .opts { display: grid; gap: 10px; }
+  .opt {
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .opt kbd { pointer-events: none; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+  .opt:disabled { cursor: default; }
+  .opt.correct { border-color: var(--good); background: rgba(91,200,175,.15); }
+  .opt.wrong { border-color: var(--bad); background: rgba(224,122,107,.13); }
+  .explain {
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: none;
+  }
+  .explain.show { display: block; }
+  .explain b { color: var(--text); }
+  .q-actions { margin-top: 18px; display: flex; gap: 10px; }
+  .btn {
+    background: var(--accent);
+    color: #11201c;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .result-card { text-align: center; padding: 40px 22px; }
+  .result-card .big { font-size: 44px; font-weight: 700; color: var(--accent); }
+  .result-card .msg { color: var(--muted); margin: 8px 0 20px; }
+  .hidden { display: none; }
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 30px; }
+
+  /* Quiz setup */
+  .setup-row { display: flex; align-items: center; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+  .setup-label { color: var(--muted); font-size: 13px; width: 80px; flex-shrink: 0; }
+  .seg { display: inline-flex; background: var(--key-bg); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg-btn {
+    border: none; background: transparent; color: var(--muted);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 550;
+    padding: 7px 14px; border-radius: 7px; cursor: pointer; transition: all .15s;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent); color: #11201c; }
+  .bank-info { color: var(--muted); font-size: 13px; margin: 18px 0 14px; }
+  .bank-info b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>vim Field Guide<span class="dot">.</span></h1>
+    <p class="sub">A practical reference for modes, motions, and editing &mdash; with a quiz to test yourself.</p>
+    <div class="prefix-note">
+      The key mental model in vim is <strong>modes</strong>. You spend most of your time in <strong>Normal mode</strong>, where keys are commands and motions &mdash; not text. Press <kbd>i</kbd>, <kbd>a</kbd>, or <kbd>o</kbd> to drop into <strong>Insert mode</strong> and type; press <kbd>Esc</kbd> to return to Normal mode. Throughout this guide, key sequences like <kbd>d</kbd><kbd>w</kbd> mean "press these keys in order from Normal mode," and <code class="cmd">:commands</code> are typed in Command-line mode (reached with <kbd>:</kbd>).
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-target="intro">Introductory</button>
+    <button class="tab" data-target="inter">Intermediate</button>
+    <button class="tab" data-target="adv">Advanced</button>
+    <button class="tab" data-target="quiz">Test Me</button>
+  </nav>
+
+  <!-- INTRODUCTORY -->
+  <section class="panel active" id="intro">
+    <h2 class="section-title">The modes</h2>
+    <p class="section-desc">Vim is modal. The same key does different things depending on the mode you are in.</p>
+    <table>
+      <tr><td class="keys"><b>Normal</b></td><td class="desc">The default. Keys are commands and motions. Return here any time with <kbd>Esc</kbd>.</td></tr>
+      <tr><td class="keys"><b>Insert</b></td><td class="desc">Type text into the buffer. Enter with <kbd>i</kbd>/<kbd>a</kbd>/<kbd>o</kbd> and others.</td></tr>
+      <tr><td class="keys"><b>Visual</b></td><td class="desc">Select text to operate on. <kbd>v</kbd> (characters), <kbd>V</kbd> (lines), <kbd>Ctrl</kbd>+<kbd>v</kbd> (block).</td></tr>
+      <tr><td class="keys"><b>Command-line</b></td><td class="desc">Ex commands and search. Reached with <kbd>:</kbd>, <kbd>/</kbd>, or <kbd>?</kbd>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Entering Insert mode</h2>
+    <table>
+      <tr><td class="keys"><kbd>i</kbd></td><td class="desc">Insert <b>before</b> the cursor.</td></tr>
+      <tr><td class="keys"><kbd>a</kbd></td><td class="desc">Append <b>after</b> the cursor.</td></tr>
+      <tr><td class="keys"><kbd>I</kbd></td><td class="desc">Insert at the first non-blank character of the line.</td></tr>
+      <tr><td class="keys"><kbd>A</kbd></td><td class="desc">Append at the end of the line.</td></tr>
+      <tr><td class="keys"><kbd>o</kbd></td><td class="desc">Open a new line <b>below</b> and insert.</td></tr>
+      <tr><td class="keys"><kbd>O</kbd></td><td class="desc">Open a new line <b>above</b> and insert.</td></tr>
+    </table>
+
+    <h2 class="section-title">Basic motions (Normal mode)</h2>
+    <table>
+      <tr><td class="keys"><kbd>h</kbd> <kbd>j</kbd> <kbd>k</kbd> <kbd>l</kbd></td><td class="desc">Left, down, up, right.</td></tr>
+      <tr><td class="keys"><kbd>w</kbd> <span class="seq">/</span> <kbd>b</kbd> <span class="seq">/</span> <kbd>e</kbd></td><td class="desc">Forward to next word start / back a word / forward to word end.</td></tr>
+      <tr><td class="keys"><kbd>0</kbd> <span class="seq">/</span> <kbd>^</kbd> <span class="seq">/</span> <kbd>$</kbd></td><td class="desc">Column 1 / first non-blank char / end of line.</td></tr>
+      <tr><td class="keys"><kbd>g</kbd><kbd>g</kbd> <span class="seq">/</span> <kbd>G</kbd></td><td class="desc">First line of file / last line of file.</td></tr>
+      <tr><td class="keys"><kbd>3</kbd><kbd>j</kbd></td><td class="desc">A <b>count</b> repeats a motion &mdash; move down 3 lines.</td></tr>
+    </table>
+
+    <h2 class="section-title">Basic editing</h2>
+    <table>
+      <tr><td class="keys"><kbd>x</kbd></td><td class="desc">Delete the character under the cursor.</td></tr>
+      <tr><td class="keys"><kbd>d</kbd><kbd>d</kbd></td><td class="desc">Delete (cut) the whole line.</td></tr>
+      <tr><td class="keys"><kbd>d</kbd><kbd>w</kbd></td><td class="desc">Delete to the start of the next word.</td></tr>
+      <tr><td class="keys"><kbd>c</kbd><kbd>w</kbd></td><td class="desc">Change a word (delete it, then Insert mode).</td></tr>
+      <tr><td class="keys"><kbd>r</kbd><kbd>x</kbd></td><td class="desc">Replace one character with <kbd>x</kbd>.</td></tr>
+      <tr><td class="keys"><kbd>R</kbd></td><td class="desc">Replace mode &mdash; overwrite characters as you type.</td></tr>
+    </table>
+
+    <h2 class="section-title">Undo, redo, copy &amp; paste</h2>
+    <table>
+      <tr><td class="keys"><kbd>u</kbd> <span class="seq">/</span> <kbd>Ctrl</kbd>+<kbd>r</kbd></td><td class="desc">Undo / redo.</td></tr>
+      <tr><td class="keys"><kbd>y</kbd><kbd>y</kbd></td><td class="desc">Yank (copy) the current line.</td></tr>
+      <tr><td class="keys"><kbd>p</kbd> <span class="seq">/</span> <kbd>P</kbd></td><td class="desc">Put after/below the cursor / before/above it.</td></tr>
+    </table>
+
+    <h2 class="section-title">Search &amp; save</h2>
+    <table>
+      <tr><td class="keys"><kbd>/</kbd>text<kbd>Enter</kbd></td><td class="desc">Search forward; <kbd>?</kbd> searches backward.</td></tr>
+      <tr><td class="keys"><kbd>n</kbd> <span class="seq">/</span> <kbd>N</kbd></td><td class="desc">Next match / previous match.</td></tr>
+      <tr><td class="keys"><code class="cmd">:w</code> <span class="seq">/</span> <code class="cmd">:q</code> <span class="seq">/</span> <code class="cmd">:wq</code></td><td class="desc">Write / quit / write-and-quit. Use <code class="cmd">:q!</code> to quit discarding changes.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Stuck in Insert mode?</b> Press <kbd>Esc</kbd>. It always brings you back to Normal mode, where the rest of vim's vocabulary lives.
+    </div>
+  </section>
+
+  <!-- INTERMEDIATE -->
+  <section class="panel" id="inter">
+    <h2 class="section-title">The operator + motion grammar</h2>
+    <p class="section-desc">Most edits are an <b>operator</b> followed by a <b>motion</b>. Learn a few of each and they combine into hundreds of commands.</p>
+    <table>
+      <tr><td class="keys"><kbd>d</kbd> <span class="seq">+</span> motion</td><td class="desc">Delete over the motion. <kbd>d</kbd><kbd>$</kbd> deletes to line end, <kbd>d</kbd><kbd>G</kbd> deletes to the file end.</td></tr>
+      <tr><td class="keys"><kbd>c</kbd> <span class="seq">+</span> motion</td><td class="desc">Change (delete then insert). <kbd>c</kbd><kbd>$</kbd> = <kbd>C</kbd>.</td></tr>
+      <tr><td class="keys"><kbd>y</kbd> <span class="seq">+</span> motion</td><td class="desc">Yank over the motion. <kbd>y</kbd><kbd>$</kbd> yanks to line end.</td></tr>
+      <tr><td class="keys"><kbd>d</kbd><kbd>w</kbd> <span class="seq">vs</span> <kbd>d</kbd><kbd>e</kbd></td><td class="desc"><kbd>d</kbd><kbd>w</kbd> deletes through to the next word's start (usually eating the space); <kbd>d</kbd><kbd>e</kbd> stops at the current word's end.</td></tr>
+    </table>
+
+    <h2 class="section-title">Line-wise shortcuts</h2>
+    <table>
+      <tr><td class="keys"><kbd>D</kbd></td><td class="desc">Delete to end of line (= <kbd>d</kbd><kbd>$</kbd>).</td></tr>
+      <tr><td class="keys"><kbd>C</kbd></td><td class="desc">Change to end of line (= <kbd>c</kbd><kbd>$</kbd>).</td></tr>
+      <tr><td class="keys"><kbd>c</kbd><kbd>c</kbd> <span class="seq">/</span> <kbd>S</kbd></td><td class="desc">Change the whole line (keeps indent). <kbd>S</kbd> is a synonym for <kbd>c</kbd><kbd>c</kbd>.</td></tr>
+      <tr><td class="keys"><kbd>s</kbd></td><td class="desc">Substitute one character (= <kbd>c</kbd><kbd>l</kbd>).</td></tr>
+      <tr><td class="keys"><kbd>J</kbd></td><td class="desc">Join the next line onto this one with a space (<kbd>g</kbd><kbd>J</kbd> joins without a space).</td></tr>
+    </table>
+
+    <h2 class="section-title">Within-line jumps</h2>
+    <table>
+      <tr><td class="keys"><kbd>f</kbd><kbd>x</kbd> <span class="seq">/</span> <kbd>F</kbd><kbd>x</kbd></td><td class="desc">Jump onto the next/previous <kbd>x</kbd> on the line.</td></tr>
+      <tr><td class="keys"><kbd>t</kbd><kbd>x</kbd> <span class="seq">/</span> <kbd>T</kbd><kbd>x</kbd></td><td class="desc">Jump just before/after <kbd>x</kbd>. Try <kbd>d</kbd><kbd>t</kbd><kbd>x</kbd> to delete up to it.</td></tr>
+      <tr><td class="keys"><kbd>;</kbd> <span class="seq">/</span> <kbd>,</kbd></td><td class="desc">Repeat the last <kbd>f</kbd>/<kbd>t</kbd> search same / opposite direction.</td></tr>
+    </table>
+
+    <h2 class="section-title">Text objects</h2>
+    <p class="section-desc">Operators also take text objects: <b>i</b> ("inner") or <b>a</b> ("around") plus a target. Powerful with <kbd>d</kbd>, <kbd>c</kbd>, <kbd>y</kbd>, <kbd>v</kbd>.</p>
+    <table>
+      <tr><td class="keys"><kbd>i</kbd><kbd>w</kbd> <span class="seq">/</span> <kbd>a</kbd><kbd>w</kbd></td><td class="desc">Inner word / a word (incl. surrounding space).</td></tr>
+      <tr><td class="keys"><kbd>c</kbd><kbd>i</kbd><kbd>"</kbd></td><td class="desc">Change the text inside the quotes (cursor anywhere between them).</td></tr>
+      <tr><td class="keys"><kbd>d</kbd><kbd>i</kbd><kbd>(</kbd> <span class="seq">/</span> <kbd>d</kbd><kbd>a</kbd><kbd>(</kbd></td><td class="desc">Delete inside parentheses / including them.</td></tr>
+      <tr><td class="keys"><kbd>d</kbd><kbd>i</kbd><kbd>{</kbd> <span class="seq">/</span> <kbd>c</kbd><kbd>i</kbd><kbd>{</kbd></td><td class="desc">Delete / change the contents of the enclosing block.</td></tr>
+    </table>
+
+    <h2 class="section-title">Search &amp; substitute</h2>
+    <table>
+      <tr><td class="keys"><kbd>*</kbd> <span class="seq">/</span> <kbd>#</kbd></td><td class="desc">Search forward/backward for the whole word under the cursor.</td></tr>
+      <tr><td class="keys"><code class="cmd">:s/old/new/</code></td><td class="desc">Replace first match on the current line.</td></tr>
+      <tr><td class="keys"><code class="cmd">:s/old/new/g</code></td><td class="desc">Replace <b>all</b> matches on the line (<code class="cmd">g</code> flag).</td></tr>
+      <tr><td class="keys"><code class="cmd">:%s/old/new/g</code></td><td class="desc">Replace everywhere in the file (<code class="cmd">%</code> = all lines).</td></tr>
+      <tr><td class="keys"><code class="cmd">:%s/old/new/gc</code></td><td class="desc">Same, but <b>confirm</b> each one (<code class="cmd">c</code> flag).</td></tr>
+    </table>
+
+    <h2 class="section-title">Visual mode &amp; indenting</h2>
+    <table>
+      <tr><td class="keys"><kbd>v</kbd> <span class="seq">/</span> <kbd>V</kbd> <span class="seq">/</span> <kbd>Ctrl</kbd>+<kbd>v</kbd></td><td class="desc">Character / line / block selection. Then <kbd>d</kbd>, <kbd>y</kbd>, <kbd>c</kbd> act on it.</td></tr>
+      <tr><td class="keys"><kbd>g</kbd><kbd>v</kbd></td><td class="desc">Reselect the previous Visual selection.</td></tr>
+      <tr><td class="keys"><kbd>></kbd><kbd>></kbd> <span class="seq">/</span> <kbd><</kbd><kbd><</kbd></td><td class="desc">Indent the line right / left by one shiftwidth.</td></tr>
+      <tr><td class="keys"><kbd>g</kbd><kbd>U</kbd><kbd>i</kbd><kbd>w</kbd> <span class="seq">/</span> <kbd>g</kbd><kbd>u</kbd><kbd>i</kbd><kbd>w</kbd></td><td class="desc">Uppercase / lowercase the inner word.</td></tr>
+    </table>
+
+    <h2 class="section-title">Marks, registers &amp; macros</h2>
+    <table>
+      <tr><td class="keys"><kbd>m</kbd><kbd>a</kbd> <span class="seq">then</span> <kbd>`</kbd><kbd>a</kbd></td><td class="desc">Set mark <b>a</b>; jump to its exact spot. <kbd>'</kbd><kbd>a</kbd> jumps to the start of that line.</td></tr>
+      <tr><td class="keys"><kbd>"</kbd><kbd>a</kbd><kbd>y</kbd><kbd>y</kbd></td><td class="desc">Yank the line into named register <b>a</b>; put it back with <kbd>"</kbd><kbd>a</kbd><kbd>p</kbd>.</td></tr>
+      <tr><td class="keys"><kbd>q</kbd><kbd>q</kbd> &hellip; <kbd>q</kbd></td><td class="desc">Record a macro into register <b>q</b>; stop with <kbd>q</kbd>.</td></tr>
+      <tr><td class="keys"><kbd>@</kbd><kbd>q</kbd> <span class="seq">/</span> <kbd>1</kbd><kbd>0</kbd><kbd>@</kbd><kbd>q</kbd></td><td class="desc">Replay macro q once / ten times. <kbd>@</kbd><kbd>@</kbd> repeats the last macro.</td></tr>
+    </table>
+
+    <h2 class="section-title">Windows, buffers &amp; tabs</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">:sp</code> <span class="seq">/</span> <code class="cmd">:vsp</code></td><td class="desc">Horizontal / vertical split.</td></tr>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>w</kbd> <span class="seq">then</span> <kbd>h</kbd>/<kbd>j</kbd>/<kbd>k</kbd>/<kbd>l</kbd></td><td class="desc">Move focus between split windows.</td></tr>
+      <tr><td class="keys"><code class="cmd">:ls</code> &middot; <code class="cmd">:b N</code></td><td class="desc">List buffers; switch to buffer N. <code class="cmd">:bn</code>/<code class="cmd">:bp</code> step next/prev.</td></tr>
+      <tr><td class="keys"><code class="cmd">:tabnew</code> &middot; <kbd>g</kbd><kbd>t</kbd> / <kbd>g</kbd><kbd>T</kbd></td><td class="desc">New tab page; next / previous tab.</td></tr>
+    </table>
+    <div class="callout">
+      <b>The dot command.</b> <kbd>.</kbd> repeats your last change. Structure edits so a single <kbd>.</kbd> can repeat them &mdash; e.g. <kbd>c</kbd><kbd>i</kbd><kbd>w</kbd>newword<kbd>Esc</kbd>, then <kbd>n</kbd> to the next match and <kbd>.</kbd> to redo it.
+    </div>
+  </section>
+
+  <!-- ADVANCED -->
+  <section class="panel" id="adv">
+    <h2 class="section-title">Global commands (<code class="cmd">:g</code>)</h2>
+    <p class="section-desc"><code class="cmd">:g/pattern/cmd</code> runs an ex command on every line matching a pattern &mdash; one of vim's most powerful tools.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">:g/TODO/d</code></td><td class="desc">Delete every line containing <code class="cmd">TODO</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">:v/foo/d</code></td><td class="desc">Delete every line that does <b>not</b> contain <code class="cmd">foo</code> (<code class="cmd">:v</code> = inverse of <code class="cmd">:g</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">:g/^$/d</code></td><td class="desc">Delete all blank lines (<code class="cmd">^$</code> matches an empty line).</td></tr>
+      <tr><td class="keys"><code class="cmd">:g/pattern/normal @q</code></td><td class="desc">Run macro <b>q</b> on every matching line.</td></tr>
+    </table>
+
+    <h2 class="section-title">Substitution power</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">:%s/\s\+$//</code></td><td class="desc">Strip trailing whitespace from every line.</td></tr>
+      <tr><td class="keys"><code class="cmd">&amp;</code> in replacement</td><td class="desc">Stands for the whole match. <code class="cmd">:%s/\d\+/[&amp;]/g</code> wraps every number in brackets.</td></tr>
+      <tr><td class="keys"><code class="cmd">\1 \2</code></td><td class="desc">Back-references to <code class="cmd">\(...\)</code> capture groups. <code class="cmd">:%s/\(\w\+\) \(\w\+\)/\2 \1/</code> swaps two words.</td></tr>
+      <tr><td class="keys"><code class="cmd">:'a,'b s/x/y/g</code></td><td class="desc">Substitute only between marks <b>a</b> and <b>b</b>.</td></tr>
+      <tr><td class="keys"><kbd>&amp;</kbd></td><td class="desc">In Normal mode, repeats the last <code class="cmd">:s</code> on the current line.</td></tr>
+    </table>
+
+    <h2 class="section-title">Ranges</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">%</code></td><td class="desc">All lines (shorthand for <code class="cmd">1,$</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">.,$</code></td><td class="desc">From the current line to the last line (<code class="cmd">.</code> = current, <code class="cmd">$</code> = last).</td></tr>
+      <tr><td class="keys"><code class="cmd">10,20</code></td><td class="desc">An explicit line range. Combine with any ex command.</td></tr>
+    </table>
+
+    <h2 class="section-title">Registers in depth</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">"0</code></td><td class="desc">The yank register &mdash; always the last <b>yank</b>, untouched by deletes.</td></tr>
+      <tr><td class="keys"><code class="cmd">"1</code>&ndash;<code class="cmd">"9</code></td><td class="desc">A ring of the last nine big deletes/changes (newest in <code class="cmd">"1</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">".</code> &middot; <code class="cmd">"%</code> &middot; <code class="cmd">"/</code></td><td class="desc">Last inserted text &middot; current filename &middot; last search pattern.</td></tr>
+      <tr><td class="keys"><code class="cmd">:reg</code></td><td class="desc">Show the contents of every register.</td></tr>
+    </table>
+
+    <h2 class="section-title">Jumps &amp; folds</h2>
+    <table>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>o</kbd> <span class="seq">/</span> <kbd>Ctrl</kbd>+<kbd>i</kbd></td><td class="desc">Go back / forward through the jump list. <kbd>`</kbd><kbd>`</kbd> toggles to the pre-jump spot.</td></tr>
+      <tr><td class="keys"><kbd>z</kbd><kbd>f</kbd></td><td class="desc">Create a fold over a motion or Visual selection.</td></tr>
+      <tr><td class="keys"><kbd>z</kbd><kbd>a</kbd> <span class="seq">/</span> <kbd>z</kbd><kbd>o</kbd> <span class="seq">/</span> <kbd>z</kbd><kbd>c</kbd></td><td class="desc">Toggle / open / close the fold under the cursor.</td></tr>
+      <tr><td class="keys"><kbd>z</kbd><kbd>z</kbd> <span class="seq">/</span> <kbd>z</kbd><kbd>t</kbd> <span class="seq">/</span> <kbd>z</kbd><kbd>b</kbd></td><td class="desc">Redraw with current line centered / at top / at bottom.</td></tr>
+    </table>
+
+    <h2 class="section-title">Visual Block tricks</h2>
+    <table>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>v</kbd> &rarr; <kbd>I</kbd> &rarr; text &rarr; <kbd>Esc</kbd></td><td class="desc">Insert the same text at the start of every selected line. <kbd>A</kbd> appends instead.</td></tr>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>a</kbd> <span class="seq">/</span> <kbd>Ctrl</kbd>+<kbd>x</kbd></td><td class="desc">Increment / decrement the number under the cursor (counts work too).</td></tr>
+    </table>
+
+    <h2 class="section-title">Ex, shell &amp; config</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">:r !ls -l</code></td><td class="desc">Read a shell command's output into the buffer (<code class="cmd">:r file</code> reads a file).</td></tr>
+      <tr><td class="keys"><code class="cmd">q:</code> <span class="seq">/</span> <code class="cmd">q/</code></td><td class="desc">Open the editable command-line / search history window.</td></tr>
+      <tr><td class="keys"><code class="cmd">~/.vimrc</code></td><td class="desc">Your config. Reload live with <code class="cmd">:source ~/.vimrc</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">:set number relativenumber</code></td><td class="desc">Hybrid line numbers: absolute on the cursor line, relative elsewhere &mdash; great for motion counts.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Pro move:</b> combine global commands with macros. <code class="cmd">:g/pattern/normal @q</code> applies a recorded macro to every matching line in one shot &mdash; bulk editing that would take many manual repetitions.
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="panel" id="quiz">
+    <div id="quiz-setup">
+      <h2 class="section-title">Test yourself</h2>
+      <p class="section-desc">Pick a difficulty and how many questions you want. Each round draws a fresh random set from the bank, and the answer order is shuffled too.</p>
+
+      <div class="setup-row">
+        <span class="setup-label">Difficulty</span>
+        <div class="seg" id="level-seg">
+          <button class="seg-btn active" data-level="beginner">Beginner</button>
+          <button class="seg-btn" data-level="intermediate">Intermediate</button>
+          <button class="seg-btn" data-level="advanced">Advanced</button>
+          <button class="seg-btn" data-level="mixed">Mixed</button>
+        </div>
+      </div>
+
+      <div class="setup-row">
+        <span class="setup-label">Questions</span>
+        <div class="seg" id="count-seg">
+          <button class="seg-btn active" data-count="5">5</button>
+          <button class="seg-btn" data-count="10">10</button>
+          <button class="seg-btn" data-count="15">15</button>
+          <button class="seg-btn" data-count="0">All</button>
+        </div>
+      </div>
+
+      <p class="bank-info" id="bank-info"></p>
+      <button class="btn" id="start-quiz">Start quiz</button>
+    </div>
+
+    <div id="quiz-play" class="hidden">
+      <div class="quiz-head">
+        <div class="progress-line" id="progress">Question 1</div>
+        <div class="score-pill" id="score">Score: 0</div>
+      </div>
+      <div id="quiz-body"></div>
+    </div>
+  </section>
+
+  <footer>Modal editing throughout: press <kbd>Esc</kbd> to return to Normal mode. Quiz questions live in <code class="cmd">questions.js</code>.</footer>
+</div>
+
+<!-- Question bank: edit questions.js to add/remove questions -->
+<script src="questions.js"></script>
+<script>
+  // ---- Tabs ----
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.target).classList.add('active');
+  }));
+
+  // ---- Quiz state ----
+  const BANK = window.VIM_QUESTIONS || [];
+  let chosenLevel = 'beginner';
+  let chosenCount = 5;
+  let QUESTIONS = [];           // the active drawn set, with options pre-shuffled
+  let idx = 0, score = 0, answered = false;
+
+  const setupEl = document.getElementById('quiz-setup');
+  const playEl = document.getElementById('quiz-play');
+  const bankInfo = document.getElementById('bank-info');
+  const body = document.getElementById('quiz-body');
+  const progressEl = document.getElementById('progress');
+  const scoreEl = document.getElementById('score');
+
+  // Fisher-Yates shuffle (returns a new array)
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function poolFor(level) {
+    return level === 'mixed' ? BANK : BANK.filter(q => q.level === level);
+  }
+
+  function updateBankInfo() {
+    const pool = poolFor(chosenLevel);
+    const want = chosenCount === 0 ? pool.length : Math.min(chosenCount, pool.length);
+    bankInfo.innerHTML = `Bank has <b>${pool.length}</b> ${chosenLevel === 'mixed' ? 'total' : chosenLevel} questions. This round will draw <b>${want}</b>.`;
+  }
+
+  // Segmented control wiring
+  function wireSeg(segId, onPick) {
+    const seg = document.getElementById(segId);
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onPick(btn);
+        updateBankInfo();
+      });
+    });
+  }
+  wireSeg('level-seg', btn => { chosenLevel = btn.dataset.level; });
+  wireSeg('count-seg', btn => { chosenCount = +btn.dataset.count; });
+
+  // Build the active question set: draw random questions, shuffle each one's options
+  function buildSet() {
+    const pool = poolFor(chosenLevel);
+    const drawn = shuffle(pool).slice(0, chosenCount === 0 ? pool.length : chosenCount);
+    QUESTIONS = drawn.map(item => {
+      const correctText = item.opts[item.correct];
+      const shuffledOpts = shuffle(item.opts);
+      return {
+        q: item.q,
+        opts: shuffledOpts,
+        correct: shuffledOpts.indexOf(correctText),
+        why: item.why,
+        level: item.level
+      };
+    });
+  }
+
+  document.getElementById('start-quiz').addEventListener('click', () => {
+    buildSet();
+    if (!QUESTIONS.length) { bankInfo.textContent = 'No questions available for that selection.'; return; }
+    idx = 0; score = 0;
+    setupEl.classList.add('hidden');
+    playEl.classList.remove('hidden');
+    render();
+  });
+
+  // ---- Quiz engine ----
+  function render() {
+    answered = false;
+    const item = QUESTIONS[idx];
+    progressEl.textContent = `Question ${idx + 1} of ${QUESTIONS.length}`;
+    scoreEl.textContent = `Score: ${score}`;
+    const badge = item.level ? `<span style="color:var(--muted);font-weight:400;text-transform:capitalize"> &middot; ${item.level}</span>` : '';
+    body.innerHTML = `
+      <div class="q-card">
+        <div class="q-num">Question ${idx + 1}${badge}</div>
+        <div class="q-text">${item.q}</div>
+        <div class="opts">
+          ${item.opts.map((o, i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}
+        </div>
+        <div class="explain" id="explain"><b>Why:</b> ${item.why}</div>
+        <div class="q-actions">
+          <button class="btn" id="next" disabled>${idx === QUESTIONS.length - 1 ? 'See results' : 'Next question'}</button>
+          <button class="btn ghost" id="quit">Quit</button>
+        </div>
+      </div>`;
+
+    body.querySelectorAll('.opt').forEach(btn => btn.addEventListener('click', () => choose(btn)));
+    document.getElementById('next').addEventListener('click', next);
+    document.getElementById('quit').addEventListener('click', backToSetup);
+  }
+
+  function choose(btn) {
+    if (answered) return;
+    answered = true;
+    const item = QUESTIONS[idx];
+    const chosen = +btn.dataset.i;
+    const opts = body.querySelectorAll('.opt');
+    opts.forEach((o, i) => {
+      o.disabled = true;
+      if (i === item.correct) o.classList.add('correct');
+      if (i === chosen && i !== item.correct) o.classList.add('wrong');
+    });
+    if (chosen === item.correct) score++;
+    scoreEl.textContent = `Score: ${score}`;
+    document.getElementById('explain').classList.add('show');
+    document.getElementById('next').disabled = false;
+  }
+
+  function next() {
+    if (idx < QUESTIONS.length - 1) { idx++; render(); }
+    else results();
+  }
+
+  function results() {
+    const total = QUESTIONS.length;
+    const pct = Math.round((score / total) * 100);
+    let msg;
+    if (pct === 100) msg = "Flawless. You are ready to drop your mouse.";
+    else if (pct >= 75) msg = "Strong. A couple of commands to nail down.";
+    else if (pct >= 50) msg = "Decent start. Revisit the guide tabs and retry.";
+    else msg = "Worth another pass through the guide. Then try again.";
+    progressEl.textContent = "Complete";
+    body.innerHTML = `
+      <div class="q-card result-card">
+        <div class="big">${score} / ${total}</div>
+        <div class="msg">${msg} (${pct}%)</div>
+        <div class="q-actions" style="justify-content:center">
+          <button class="btn" id="again">New round</button>
+          <button class="btn ghost" id="change">Change settings</button>
+        </div>
+      </div>`;
+    document.getElementById('again').addEventListener('click', () => {
+      buildSet(); idx = 0; score = 0; render();
+    });
+    document.getElementById('change').addEventListener('click', backToSetup);
+  }
+
+  function backToSetup() {
+    playEl.classList.add('hidden');
+    setupEl.classList.remove('hidden');
+  }
+
+  // Init
+  if (!BANK.length) {
+    bankInfo.innerHTML = '&#9888; Question bank failed to load. Make sure <code class="cmd">questions.js</code> sits next to this HTML file.';
+    document.getElementById('start-quiz').disabled = true;
+  } else {
+    updateBankInfo();
+  }
+</script>
+</body>
+</html>

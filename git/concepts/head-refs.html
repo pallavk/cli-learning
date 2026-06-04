@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HEAD, refs & the detached HEAD</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- small extras reusing the design language ---- */
+  .filecard{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0;line-height:1.7;overflow-x:auto;white-space:pre}
+  .filecard .path{color:var(--accent)}
+  .filecard .val{color:var(--purple)}
+  .filecard .cmt{color:var(--muted)}
+  table.reftable{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  table.reftable th,table.reftable td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+  table.reftable th{background:var(--panel-2);color:var(--text);font-weight:600}
+  table.reftable td{color:var(--muted)}
+  table.reftable code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>HEAD, refs &amp; the <span class="dot">detached HEAD</span></h1>
+  <p class="sub">Branches, tags, and HEAD are all just <b>pointers</b> — tiny files holding a commit hash. Once you see the pointers, the rest of git stops being magic.</p>
+
+  <p class="lead">Git's history is a graph of immutable commits, each naming its parent. Everything you <i>do</i> — switch branches, commit, tag a release — is really just moving little named pointers around that graph. A <b>branch</b> is a movable pointer. A <b>tag</b> is a pinned pointer. <b>HEAD</b> is the pointer that says "you are here". The dreaded <b>detached HEAD</b> is simply HEAD pointing straight at a commit instead of at a branch.</p>
+
+  <h2>First — what <i>is</i> a ref?</h2>
+  <p>All of those pointers share one underlying type: the <b>ref</b> (short for <i>reference</i>). A ref is simply a <b>name that points to a commit</b>, stored as a tiny file under <code class="c">.git/refs/</code> whose contents are a commit hash. That's the whole idea — and almost every git "thing" you can name is just a ref living in a different folder:</p>
+
+  <div class="filecard"><span class="cmt"># a peek inside a repo's .git directory</span>
+.git/
+├─ <span class="path">HEAD</span>                   <span class="cmt"># → ref: refs/heads/main   (a symbolic ref — points at another ref)</span>
+├─ <span class="path">refs/heads/main</span>        <span class="cmt"># →</span> <span class="val">4399030…</span>  <span class="cmt"># a branch (moves when you commit)</span>
+├─ <span class="path">refs/heads/feature</span>     <span class="cmt"># →</span> <span class="val">a1b2c3d…</span>
+├─ <span class="path">refs/tags/v1.0</span>         <span class="cmt"># →</span> <span class="val">9f8e7d6…</span>  <span class="cmt"># a tag (pinned, never moves)</span>
+├─ <span class="path">refs/remotes/origin/main</span> <span class="cmt"># →</span> <span class="val">4399030…</span>  <span class="cmt"># remote-tracking (last fetch)</span>
+└─ <span class="path">packed-refs</span>            <span class="cmt"># many refs packed into one file for efficiency</span></div>
+
+  <p>The <i>folder</i> a ref lives in is what gives it its behaviour:</p>
+
+  <table class="reftable">
+    <tr><th>Kind of ref</th><th>Lives under</th><th>What makes it special</th></tr>
+    <tr><td><b>Branch</b></td><td><code class="c">refs/heads/</code></td><td>A <b>movable</b> pointer. Whenever you commit while it's the current branch, git rewrites its file to the new commit — it <i>follows</i> you forward.</td></tr>
+    <tr><td><b>Tag</b></td><td><code class="c">refs/tags/</code></td><td>A <b>pinned</b> pointer, meant never to move (a release marker). <i>Lightweight</i> = points at a commit; <i>annotated</i> = points at a tag <i>object</i> holding a message, tagger and date.</td></tr>
+    <tr><td><b>Remote-tracking</b></td><td><code class="c">refs/remotes/</code></td><td>A <b>read-only</b> local snapshot of where a remote's branch was at your last <code class="c">git fetch</code> (e.g. <code class="c">origin/main</code>). You never commit on it; fetch moves it.</td></tr>
+    <tr><td><b>HEAD</b></td><td><code class="c">.git/HEAD</code></td><td>The special "you are here" ref. Normally <b>symbolic</b> (<code class="c">ref: refs/heads/&lt;branch&gt;</code>); <b>detached</b> when it holds a commit hash directly.</td></tr>
+    <tr><td><b>Scratch refs</b></td><td><code class="c">.git/</code> top level</td><td><code class="c">ORIG_HEAD</code>, <code class="c">FETCH_HEAD</code>, <code class="c">MERGE_HEAD</code> — temporary pointers git writes during operations so you (and it) can refer back to them.</td></tr>
+  </table>
+
+  <p>Two refinements you'll meet everywhere:</p>
+  <p><b>Symbolic refs.</b> A ref can point at <i>another ref</i> instead of a commit — its file literally contains <code class="c">ref: refs/heads/main</code>. <kbd>HEAD</kbd> is the everyday example: it points at a branch, which points at a commit. That one extra hop is exactly why a single <code class="c">git commit</code> advances both your branch <i>and</i> HEAD — HEAD never changed, the branch it names did.</p>
+  <p><b>Short names vs full names.</b> You type <code class="c">main</code>, but the true name is <code class="c">refs/heads/main</code>. Git resolves a short name by searching a fixed order (<code class="c">refs/</code>, <code class="c">refs/tags/</code>, <code class="c">refs/heads/</code>, <code class="c">refs/remotes/</code>…), which is why a tag and a branch with the same name can be ambiguous. And to avoid thousands of one-line files, git periodically <b>packs</b> refs into a single <code class="c">.git/packed-refs</code> — same refs, stored compactly.</p>
+
+  <div class="callout">
+    <b>Inspect refs yourself.</b> <code class="c">git show-ref</code> lists every ref and its hash · <code class="c">git for-each-ref</code> does the same with formatting · <code class="c">git symbolic-ref HEAD</code> prints the branch HEAD points at · <code class="c">git rev-parse main</code> resolves a name to its commit hash · <code class="c">cat .git/HEAD</code> shows the symbolic ref in the raw.
+  </div>
+
+  <h2>Seeing the pointers move</h2>
+  <p>With that vocabulary, the rest of this page is just watching refs move around the commit graph. The legend below colours each commit by its role in the current step:</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> commits on a branch</span>
+    <span><span class="dot-l feat"></span> the commit HEAD is visiting</span>
+    <span><span class="dot-l new"></span> a freshly made commit</span>
+    <span><span class="dot-l ghost"></span> orphaned / reflog-only</span>
+  </div>
+
+  <h2>1 · A branch is just a movable pointer</h2>
+  <p>A branch is not a copy of your files and not a container of commits. It is a <b>single line of text</b> in a file under <code class="c">.git/refs/heads/&lt;name&gt;</code> holding one 40-character commit hash (plus a trailing newline — 41 bytes total). That is the entire branch.</p>
+
+  <div class="filecard"><span class="cmt"># the whole "main" branch is this one file:</span>
+<span class="path">.git/refs/heads/main</span>  →  <span class="val">4399030f3a7bb2148351d1465efb42ccd62ecb11</span>
+<span class="cmt"># 40 hex chars + newline = 41 bytes. That's it.</span></div>
+
+  <p>This is why creating a branch is instant and free: <code class="c">git branch feature</code> just writes one more 41-byte file. And committing is equally simple — git writes the new commit object, then <b>rewrites the current branch's file</b> to hold the new commit's hash. The branch <i>follows</i> you forward.</p>
+
+  <div class="scene" id="scene-commit"></div>
+
+  <div class="callout">
+    <b>"Branch" vs "the commits on it".</b> People say "delete the branch and you lose the commits", but deleting a branch only removes the pointer <i>file</i>. The commit objects live in <code class="c">.git/objects</code> and survive until garbage collection — if another ref (or the reflog) still reaches them, they're perfectly safe.
+  </div>
+
+  <h2>2 · HEAD — the pointer to "where you are"</h2>
+  <p><code class="c">HEAD</code> answers the question "what is my working tree based on, and where will my next commit go?". Crucially, in the normal case HEAD does <b>not</b> name a commit directly. It is a <b>symbolic ref</b>: <code class="c">.git/HEAD</code> contains the text <code class="c">ref: refs/heads/main</code>. It points at a <i>branch</i>, which points at a <i>commit</i>.</p>
+
+  <div class="filecard"><span class="cmt"># normal state — HEAD is a symbolic ref (one level of indirection):</span>
+<span class="path">.git/HEAD</span>             →  <span class="val">ref: refs/heads/main</span>      <span class="cmt"># HEAD → branch</span>
+<span class="path">.git/refs/heads/main</span>  →  <span class="val">4399030…</span>                  <span class="cmt"># branch → commit</span></div>
+
+  <p>So the chain is <b>HEAD → main → commit</b>. This double-hop is exactly why <code class="c">git commit</code> on <code class="c">main</code> moves <code class="c">main</code> forward <i>and</i> HEAD seems to follow: git resolves HEAD to the branch <code class="c">main</code> and advances <i>that branch's</i> file. HEAD never had to change — it still says <code class="c">ref: refs/heads/main</code>, which now points one commit further along. In the diagrams the green <kbd>HEAD → main</kbd> tag shows this indirection; when HEAD names a branch the tag carries the branch name with it.</p>
+
+  <h2>3 · Tags — pointers that don't move</h2>
+  <p>A tag is also just a ref, living under <code class="c">.git/refs/tags/&lt;name&gt;</code>. The difference from a branch is behavioural: <b>committing never moves a tag</b>. A tag pins a name to one specific commit forever (until you delete or force it). That's what makes <code class="c">v1.0</code> a stable label for a release.</p>
+
+  <table class="reftable">
+    <tr><th>&nbsp;</th><th>Branch</th><th>Tag</th></tr>
+    <tr><th>Stored at</th><td><code class="c">.git/refs/heads/…</code></td><td><code class="c">.git/refs/tags/…</code></td></tr>
+    <tr><th>Moves on commit?</th><td><b style="color:var(--accent)">Yes</b> — follows your work</td><td><b style="color:var(--feat)">No</b> — stays pinned</td></tr>
+    <tr><th>HEAD can point at it?</th><td>Yes — the attached, normal case</td><td>Checking one out <b>detaches</b> HEAD</td></tr>
+    <tr><th>Two flavours</th><td>—</td><td><b>Lightweight</b>: a plain ref file holding a commit hash. <b>Annotated</b>: the ref points to a <i>tag object</i> (with tagger, date, message, optional signature), which in turn points to the commit.</td></tr>
+  </table>
+
+  <div class="filecard"><span class="cmt"># lightweight tag — just a ref pointing straight at a commit:</span>
+<span class="path">.git/refs/tags/v1.0</span>  →  <span class="val">c6ef291…</span>            <span class="cmt"># (a commit)</span>
+<span class="cmt"># annotated tag — ref points at a tag OBJECT, which points at the commit:</span>
+<span class="path">.git/refs/tags/v2.0</span>  →  <span class="val">ed7fc98…</span>            <span class="cmt"># git cat-file -t ⇒ "tag"</span></div>
+
+  <p>Below, watch a commit advance the branch while the tag stays put — the visual heart of "branch moves, tag is pinned".</p>
+  <div class="scene" id="scene-tag"></div>
+
+  <h2>4 · The detached HEAD — the whole story</h2>
+  <p>Here is the state that confuses everyone. When you check out something that is <b>not a branch</b> — a raw commit hash, a tag, or a remote-tracking ref like <code class="c">origin/main</code> — git has nowhere to write "you are on branch X". So it puts the commit hash <i>directly</i> into <code class="c">.git/HEAD</code>. Now <b>HEAD → commit</b>, with no branch in between. That is a detached HEAD.</p>
+
+  <div class="filecard"><span class="cmt"># attached:   HEAD → branch → commit</span>
+<span class="path">.git/HEAD</span>  →  <span class="val">ref: refs/heads/main</span>
+<span class="cmt"># detached:   HEAD → commit  (a raw hash, no "ref:")</span>
+<span class="path">.git/HEAD</span>  →  <span class="val">c6ef29126bb8bb8ddaeeb74bf634ced4fda08c21</span></div>
+
+  <p>Step through the full lifecycle — detach, commit while detached, reattach, watch the commit get orphaned, then the rescue:</p>
+  <div class="scene" id="scene-detach"></div>
+
+  <div class="callout warn">
+    <b>Why detached commits are easy to lose.</b> A commit is only "kept" if some ref can reach it. While detached, your new commit is reachable <i>only</i> through HEAD. The moment you check out a branch, HEAD moves off it and <b>nothing</b> points at that commit — it becomes orphaned, reachable only via the reflog until garbage collection deletes it for good.
+  </div>
+
+  <h3>Recovering and avoiding the trap</h3>
+  <p>If you already left and panicked: the commit is almost always still in the <b>reflog</b>. <code class="c">git reflog</code> shows it; create a branch on it to save it:</p>
+  <div class="todo"><span class="cmt"># find the lost commit's hash in the reflog…</span>
+git reflog
+<span class="cmt"># …then plant a branch on it (or: git switch -c rescued &lt;hash&gt;)</span>
+git branch rescued &lt;hash&gt;</div>
+  <p>Better: save it <b>before</b> leaving. While still detached, run <code class="c">git switch -c newbranch</code> — this plants a branch pointer on your current commit and re-attaches HEAD to it, so the work is now on a real, named branch.</p>
+
+  <div class="callout">
+    <b><code class="c">switch</code> vs <code class="c">checkout</code>.</b> Modern git splits the overloaded <code class="c">checkout</code> into <code class="c">git switch</code> (move between branches) and <code class="c">git restore</code> (restore files). <code class="c">git switch</code> warns far more loudly and <b>refuses</b> to detach unless you ask explicitly with <code class="c">git switch --detach &lt;commit&gt;</code>. Handy extras: <code class="c">git switch -</code> jumps back to the previous branch, and <code class="c">git switch -c &lt;name&gt;</code> creates-and-switches in one step.
+  </div>
+
+  <h2>5 · Walking the graph: <code class="c">~</code> vs <code class="c">^</code> vs <code class="c">^2</code></h2>
+  <p>Once you can name <i>any</i> commit relative to a pointer, you rarely need raw hashes. The shorthands trip people up because <code class="c">~</code> and <code class="c">^</code> look interchangeable but answer different questions.</p>
+
+  <table class="reftable">
+    <tr><th>Form</th><th>Means</th></tr>
+    <tr><td><code class="c">HEAD</code> &nbsp;/&nbsp; <code class="c">@</code></td><td><code class="c">@</code> is a plain alias for <code class="c">HEAD</code> — where you are now.</td></tr>
+    <tr><td><code class="c">HEAD^</code></td><td>The <b>first parent</b> of HEAD. <code class="c">HEAD^</code> = <code class="c">HEAD^1</code>.</td></tr>
+    <tr><td><code class="c">HEAD^2</code></td><td>The <b>second parent</b> — only meaningful on a <b>merge commit</b>. It is the tip of the branch that was merged <i>in</i>.</td></tr>
+    <tr><td><code class="c">HEAD~1</code></td><td>Go back <b>1</b> step along first-parent links. On a non-merge commit, <code class="c">HEAD~1</code> ≡ <code class="c">HEAD^</code>.</td></tr>
+    <tr><td><code class="c">HEAD~2</code></td><td>Go back <b>2</b> first-parent steps (i.e. <code class="c">HEAD^^</code>). It keeps following the <i>first</i> parent each hop — it never crosses into a merged side branch.</td></tr>
+    <tr><td><code class="c">HEAD@{2}</code></td><td><b>Not ancestry.</b> This is the <b>reflog</b>: where HEAD <i>was</i> 2 moves ago in time. It can point anywhere — a different branch, an amended commit — and usually differs from <code class="c">HEAD~2</code>.</td></tr>
+  </table>
+
+  <p>The split only becomes visible on a merge. Below, <b>M</b> is a merge commit with two parents: <b>C</b> (first parent, the branch you were on) and <b>S</b> (second parent, the branch you merged in). Watch where each shorthand lands:</p>
+  <div class="scene" id="scene-merge-nav"></div>
+
+  <div class="callout warn">
+    <b><code class="c">~</code> follows first-parents; <code class="c">^n</code> picks a parent.</b> Mnemonic: <b>tilde counts, caret chooses</b>. <code class="c">~N</code> walks N generations up the first-parent line. <code class="c">^N</code> selects the N-th parent of <i>one</i> commit (and stays there). So <code class="c">HEAD~2</code> = "two commits back" while <code class="c">HEAD^2</code> = "the merged-in side at this merge". They are only equal by accident.
+  </div>
+
+  <div class="callout">
+    <b><code class="c">HEAD@{n}</code> lives in a different dimension.</b> <code class="c">HEAD~n</code> walks the commit <i>graph</i> (parentage, fixed by history). <code class="c">HEAD@{n}</code> walks the <i>reflog</i> (time, a per-clone diary of where HEAD has been). After a rebase or a bad reset, <code class="c">HEAD@{1}</code> is your time-machine back to the previous tip — see the <a href="reflog.html">reflog explainer</a>.
+  </div>
+
+  <h2>Check your understanding</h2>
+  <details class="reveal"><summary>Why does committing on <code class="c">main</code> move both <code class="c">main</code> and HEAD, even though git only rewrote one file?</summary>
+    <div class="body">Because HEAD is a <i>symbolic ref</i> pointing at the branch, not at a commit. <code class="c">.git/HEAD</code> still literally says <code class="c">ref: refs/heads/main</code> before and after the commit. Git only rewrote <code class="c">.git/refs/heads/main</code> to hold the new hash. HEAD "moved" only because it resolves <i>through</i> main, which now points one commit further on. One file changed; the indirection did the rest.</div></details>
+  <details class="reveal"><summary>You did <code class="c">git checkout abc123</code>, made a commit, then ran <code class="c">git checkout main</code>. Where is that commit now?</summary>
+    <div class="body">Orphaned. You were in detached HEAD, so the new commit was reachable <i>only</i> through HEAD. Checking out <code class="c">main</code> moved HEAD onto the branch, and now no ref reaches your commit. It still exists in <code class="c">.git/objects</code> and in the reflog — recover it with <code class="c">git reflog</code> then <code class="c">git branch rescued &lt;hash&gt;</code> — but it will be garbage-collected eventually if you don't. The safe move is to run <code class="c">git switch -c &lt;name&gt;</code> <i>before</i> leaving.</div></details>
+  <details class="reveal"><summary>On a merge commit M, what is the difference between <code class="c">M^2</code> and <code class="c">M~2</code>?</summary>
+    <div class="body"><code class="c">M^2</code> is the <b>second parent</b> of M — the tip of the branch that was merged in (one hop, picking the side branch). <code class="c">M~2</code> is <b>two first-parent steps back</b> — it follows the first parent twice and stays on the mainline, never entering the merged branch. They land on completely different commits. Caret <i>chooses a parent</i>; tilde <i>counts generations</i>.</div></details>
+  <details class="reveal"><summary>Is <code class="c">HEAD@{2}</code> the same as <code class="c">HEAD~2</code>?</summary>
+    <div class="body">No, and they usually disagree. <code class="c">HEAD~2</code> is ancestry — two commits back in the history graph, fixed for everyone with this history. <code class="c">HEAD@{2}</code> is the <b>reflog</b> — where your HEAD pointer was two moves ago in <i>time</i>, which is local to your clone and depends on what you've been doing (switching branches, resetting, rebasing). One is about the graph; the other is about your recent activity.</div></details>
+
+  <footer>Part of the Git concepts set · step through each diagram, then read the callouts.</footer>
+</div>
+
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git rebase main"   // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block (interactive rebase)
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size — count refs stacked on the top row so chips never clip upward,
+    // and add a clear gap below so the graph can't overlap following text.
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack = {};
+    (frame.refs||[]).forEach(rf=>{ const c=frame.commits.find(x=>x.id===rf.at); if(c){ topStack[c.row]=(topStack[c.row]||0)+1; }});
+    const topRefRoom = Math.max(0, ((topStack[minR]||0) - 1) * 24); // extra chip rows above the top commit row
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+/* ---------------- Scene 1: a commit advances branch + HEAD together ---------------- */
+makeScene(document.getElementById('scene-commit'), [
+  {
+    narration:'You\'re on <b>main</b>, which points at commit <b>B</b>. Note the chain: the green tag reads <kbd>HEAD → main</kbd> — HEAD points at the branch <i>main</i>, and main points at <b>B</b>.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'}
+    ],
+    edges:[['B','A']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  },
+  {
+    command:'git commit -m "C"',
+    narration:'You make a commit. Git writes a new commit object <b>C</b> whose parent is B, then <b>rewrites the file</b> <code class="c">.git/refs/heads/main</code> to hold C\'s hash. Only that one file changed.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'new',label:'C'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    narration:'<b>main</b> now points at <b>C</b>, and HEAD followed automatically — because <code class="c">.git/HEAD</code> still literally says <code class="c">ref: refs/heads/main</code>. HEAD resolves <i>through</i> main, so advancing main advances HEAD. The branch pointer trails your work forward.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene 2: branch moves, tag stays pinned ---------------- */
+makeScene(document.getElementById('scene-tag'), [
+  {
+    narration:'At commit <b>B</b> you cut a release and tagged it: <code class="c">git tag v1.0</code>. Now both <b>main</b> (a branch) and <b>v1.0</b> (a tag) point at B. HEAD → main.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'}
+    ],
+    edges:[['B','A']],
+    refs:[{name:'main',at:'B',kind:'head'},{name:'v1.0',at:'B',kind:'tag'}]
+  },
+  {
+    command:'git commit -m "C"  &amp;&amp;  git commit -m "D"',
+    narration:'You keep working and add <b>C</b>, then <b>D</b>. Each commit advances the <b>branch</b> pointer — main slides forward to D.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'base'},{id:'D',col:3,row:0,kind:'new',label:'D'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'},{name:'v1.0',at:'B',kind:'tag'}]
+  },
+  {
+    narration:'<b>The contrast:</b> <code class="c">main</code> moved with every commit, but <code class="c">v1.0</code> stayed <b>pinned</b> to B. Committing never touches a tag — that\'s precisely what makes <code class="c">v1.0</code> a stable, permanent label for that exact release.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'base'},{id:'D',col:3,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'},{name:'v1.0',at:'B',kind:'tag'}]
+  }
+]);
+
+/* ---------------- Scene 3: the full detached-HEAD lifecycle ---------------- */
+makeScene(document.getElementById('scene-detach'), [
+  {
+    narration:'Normal, attached state. History A→B→C, and <kbd>HEAD → main</kbd> points at <b>C</b>. There\'s also a tag <b>v1.0</b> sitting on the older commit <b>A</b>.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'v1.0',at:'A',kind:'tag'}]
+  },
+  {
+    command:'git checkout B   <span style="color:#9a9ba1"># a raw commit, not a branch</span>',
+    narration:'You check out the older commit <b>B</b> directly. Git has no branch to record, so it writes B\'s hash <i>straight into</i> <code class="c">.git/HEAD</code>. HEAD now points at the commit — <b>no branch in between</b>. This is detached HEAD: the tag turns plain <kbd>HEAD</kbd>.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'feat'},{id:'C',col:2,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'HEAD',at:'B',kind:'head'},{name:'main',at:'C',kind:'branch'},{name:'v1.0',at:'A',kind:'tag'}]
+  },
+  {
+    command:'git commit -m "X"',
+    narration:'You commit while detached. A real new commit <b>X</b> forms (parent B) and HEAD advances to it — but <b>no branch moved</b>. <code class="c">main</code> is still back at C. X hangs off HEAD alone.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'X',col:2,row:1,kind:'new',label:'X'}
+    ],
+    edges:[['B','A'],['C','B'],['X','B']],
+    refs:[{name:'HEAD',at:'X',kind:'head'},{name:'main',at:'C',kind:'branch'},{name:'v1.0',at:'A',kind:'tag'}]
+  },
+  {
+    command:'git checkout main',
+    narration:'The danger. You switch back to <b>main</b> — HEAD re-attaches to the branch at C. Now <b>nothing</b> points at <b>X</b>: no branch, no tag, and HEAD just left it. X is <b>orphaned</b>, reachable only through the reflog until garbage collection deletes it.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'X',col:2,row:1,kind:'ghost',label:'X'}
+    ],
+    edges:[['B','A'],['C','B'],['X','B']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'v1.0',at:'A',kind:'tag'}]
+  },
+  {
+    command:'git switch -c rescue   <span style="color:#9a9ba1"># done BEFORE leaving</span>',
+    narration:'The fix. Rewind: while still detached on <b>X</b>, you run <code class="c">git switch -c rescue</code>. That plants a <b>new branch pointer</b> on X and re-attaches HEAD to it. X is now referenced by a real branch — safe, named, and no longer at risk.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'X',col:2,row:1,kind:'new',label:'X'}
+    ],
+    edges:[['B','A'],['C','B'],['X','B']],
+    refs:[{name:'rescue',at:'X',kind:'head'},{name:'main',at:'C',kind:'branch'},{name:'v1.0',at:'A',kind:'tag'}]
+  }
+]);
+
+/* ---------------- Scene 4: ^ vs ~ vs ^2 on a merge ---------------- */
+makeScene(document.getElementById('scene-merge-nav'), [
+  {
+    narration:'Setup. You were on <b>main</b> (…A→B→C) and merged a side branch (B→S) into it. The result is a <b>merge commit M</b> with two parents: <b>C</b> (first parent) and <b>S</b> (second parent). HEAD → main → M.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'S',col:2,row:0,kind:'feat'},{id:'M',col:3,row:1,kind:'base',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['S','B'],['M','C'],['M','S']],
+    refs:[{name:'main',at:'M',kind:'head'}]
+  },
+  {
+    command:'git show HEAD^      <span style="color:#9a9ba1"># = HEAD^1, first parent</span>',
+    narration:'<code class="c">HEAD^</code> selects the <b>first parent</b> of M — commit <b>C</b>, the mainline tip you were on when you merged. Caret picks <i>which parent</i>.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'new',label:'C'},
+      {id:'S',col:2,row:0,kind:'feat'},{id:'M',col:3,row:1,kind:'base',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['S','B'],['M','C'],['M','S']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'HEAD^',at:'C',kind:'tag'}]
+  },
+  {
+    command:'git show HEAD^2     <span style="color:#9a9ba1"># second parent</span>',
+    narration:'<code class="c">HEAD^2</code> selects the <b>second parent</b> — commit <b>S</b>, the tip of the branch that was merged <i>in</i>. This only exists because M is a merge. A regular commit has no <code class="c">^2</code>.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'S',col:2,row:0,kind:'new',label:'S'},{id:'M',col:3,row:1,kind:'base',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['S','B'],['M','C'],['M','S']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'HEAD^2',at:'S',kind:'tag'}]
+  },
+  {
+    command:'git show HEAD~1     <span style="color:#9a9ba1"># one first-parent step</span>',
+    narration:'<code class="c">HEAD~1</code> walks <b>one</b> step up the first-parent line — landing on <b>C</b>, same as <code class="c">HEAD^</code>. For a single step on the mainline, tilde and caret agree.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'new',label:'C'},
+      {id:'S',col:2,row:0,kind:'feat'},{id:'M',col:3,row:1,kind:'base',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['S','B'],['M','C'],['M','S']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'HEAD~1',at:'C',kind:'tag'}]
+  },
+  {
+    command:'git show HEAD~2     <span style="color:#9a9ba1"># two first-parent steps</span>',
+    narration:'<code class="c">HEAD~2</code> takes <b>two</b> first-parent steps: M → C → <b>B</b>. It stays on the mainline and <b>never</b> enters the merged side branch S. This is where tilde and caret diverge: <code class="c">~2</code> lands on B, but <code class="c">^2</code> landed on S.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'new',label:'B'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'S',col:2,row:0,kind:'feat'},{id:'M',col:3,row:1,kind:'base',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['S','B'],['M','C'],['M','S']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'HEAD~2',at:'B',kind:'tag'}]
+  },
+  {
+    narration:'<b>Side by side:</b> from M, <code class="c">HEAD^</code>/<code class="c">HEAD~1</code> → C (first parent), <code class="c">HEAD^2</code> → S (the merged-in branch), <code class="c">HEAD~2</code> → B (two mainline steps back). <b>Tilde counts generations; caret chooses a parent.</b>',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'S',col:2,row:0,kind:'feat'},{id:'M',col:3,row:1,kind:'base',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['S','B'],['M','C'],['M','S']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'~2→B',at:'B',kind:'branch'},{name:'^→C',at:'C',kind:'branch'},{name:'^2→S',at:'S',kind:'tag'}]
+  }
+]);
+</script>
+</body>
+</html>

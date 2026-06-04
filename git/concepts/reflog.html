@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>git reflog: your safety net</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+  /* reflog-listing accents (consistent with the existing palette) */
+  .todo .hash{color:var(--new)} .todo .ptr{color:var(--accent)} .todo .op{color:var(--feat)} .todo .hl{background:rgba(91,200,175,.12);border-radius:3px}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>git reflog: <span class="dot">your safety net</span></h1>
+  <p class="sub">The reflog is the reason git is <b>undo-able</b>. Almost nothing you do is truly lost — and this is how you get it back.</p>
+
+  <p class="lead">Every time <code class="c">HEAD</code> moves — a commit, a checkout, a reset, a rebase, a merge — git quietly appends a line to a log recording <i>where HEAD just was</i>. That log is the <b>reflog</b>. It means that even when a command appears to throw work away, git still remembers the exact hash it was sitting at. Learn to read the reflog and the fear drains out of git: a bad <code class="c">reset --hard</code>, a botched rebase, a deleted branch, an amended-away commit — all recoverable.</p>
+
+  <div class="callout">
+    <b>The reflog is yours alone.</b> It lives in <code class="c">.git/logs/</code> and is <b>local only</b> — it is never pushed, fetched, or cloned. Your teammate's reflog is theirs; yours is yours. A fresh clone has an empty reflog. So the reflog protects <i>your own</i> local missteps, not shared history.
+  </div>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> commits on the branch</span>
+    <span><span class="dot-l feat"></span> the work about to be "lost"</span>
+    <span><span class="dot-l new"></span> recovered / current tip</span>
+    <span><span class="dot-l ghost"></span> orphaned — reflog only</span>
+  </div>
+
+  <h2>1 · Where do "lost" commits go?</h2>
+  <p>The crucial mental model: a destructive-looking command does not <i>delete</i> commits. A commit is an object in git's database, addressed by its hash. When you <code class="c">reset --hard</code> past it, delete the branch pointing at it, or rebase it away, you only remove the <b>references</b> that point to it. The object itself stays on disk, now <i>unreferenced</i> — and the reflog still records the hash. That is your thread back to it.</p>
+
+  <div class="callout">
+    <b>Garbage collection is slow on purpose.</b> Unreferenced objects survive until <code class="c">git gc</code> prunes them — and the defaults are generous: <b>~90 days</b> for objects still reachable from a reflog entry (<code class="c">gc.reflogExpire</code>), and <b>~30 days</b> for fully unreachable ones (<code class="c">gc.reflogExpireUnreachable</code>). You almost always have weeks to recover. The reflog is what keeps those entries "reachable," buying you the longer window.
+  </div>
+
+  <h2>2 · Reading the reflog</h2>
+  <p>Plain <code class="c">git reflog</code> is shorthand for <code class="c">git reflog show HEAD</code>. It prints one line per HEAD movement, newest first:</p>
+
+  <div class="todo"><span class="hash">6fac19d</span> <span class="ptr">HEAD@{0}</span>: <span class="op">commit</span>: commit D
+<span class="hash">4036700</span> <span class="ptr">HEAD@{1}</span>: <span class="op">commit</span>: commit C
+<span class="hash">cf529a5</span> <span class="ptr">HEAD@{2}</span>: <span class="op">commit</span>: commit B
+<span class="hash">d79166f</span> <span class="ptr">HEAD@{3}</span>: <span class="op">commit (initial)</span>: commit A</div>
+
+  <p>Each line is: <span class="muted">abbreviated hash · the selector · the operation · description</span>. The selector <code class="c">HEAD@{n}</code> means <b>"where HEAD pointed n moves ago"</b>. <code class="c">HEAD@{0}</code> is right now; <code class="c">HEAD@{1}</code> is one HEAD-move in the past, and so on. You can use that selector anywhere git wants a commit: <code class="c">git show HEAD@{2}</code>, <code class="c">git diff HEAD@{5}</code>, <code class="c">git reset --hard HEAD@{1}</code>.</p>
+
+  <div class="callout warn">
+    <b><code class="c">HEAD@{n}</code> is NOT <code class="c">HEAD~n</code>.</b> This trips everyone up. <code class="c">HEAD~2</code> walks <b>two parents back in ancestry</b> — it is a structural fact about the commit graph, the same for everyone, forever. <code class="c">HEAD@{2}</code> walks <b>two entries back in <i>your</i> reflog</b> — a time-travel selector through your local history of moves, and it changes every time you do anything. After a <code class="c">reset --hard</code>, the commit you abandoned is <i>not</i> at <code class="c">HEAD~1</code> (it is no longer an ancestor) but it <i>is</i> at <code class="c">HEAD@{1}</code> (HEAD was just there). Curly braces = reflog/time; tilde = ancestry.
+  </div>
+
+  <h3>Other ways to query it</h3>
+  <div class="todo"><span class="cmt"># the reflog of a specific branch, not HEAD</span>
+git reflog show main
+<span class="cmt"># time-based selectors — git interpolates from reflog timestamps</span>
+git reflog show <span class="ptr">main@{yesterday}</span>
+git show <span class="ptr">HEAD@{2.hours.ago}</span>
+git diff <span class="ptr">main@{one.week.ago}</span> main</div>
+  <p class="muted" style="font-size:13.5px">Branch reflogs (<code class="c">main@{n}</code>) record where that branch tip has been; HEAD's reflog records where you've been. Time selectors like <code class="c">@{yesterday}</code> are resolved against the recorded timestamps, so they only reach as far back as the reflog itself.</p>
+
+  <h2>3 · Rescue story: undoing a bad <code class="c">reset --hard</code></h2>
+  <p>This is the canonical save. You have <b>A→B→C→D</b> on <code class="c">main</code>, HEAD at D. You meant to unstage something but typed <code class="c">git reset --hard B</code>. The branch jumps back to B and C, D vanish from your working tree. Step through the disaster — and the one-line recovery:</p>
+
+  <div class="scene" id="scene-rescue"></div>
+
+  <div class="callout">
+    <b>Why <code class="c">HEAD@{1}</code> works here.</b> The <code class="c">reset</code> itself is a HEAD movement, so it became the new <code class="c">HEAD@{0}</code>. That pushed the moment <i>before</i> the reset — when HEAD was still at D — to <code class="c">HEAD@{1}</code>. Resetting hard to <code class="c">HEAD@{1}</code> lands the branch right back on D. You could equally use D's hash from the reflog: <code class="c">git reset --hard 6fac19d</code>.
+  </div>
+
+  <h2>4 · Rescue story: recovering a deleted branch</h2>
+  <p>You finished a spike on a <code class="c">feature</code> branch, switched back to <code class="c">main</code>, and ran <code class="c">git branch -D feature</code> to tidy up — then realized you still needed that commit. Deleting a branch only removes the <i>pointer</i>; the commit is still in the object database, and HEAD's reflog recorded the hash back when you were on the branch.</p>
+
+  <div class="scene" id="scene-branch"></div>
+
+  <div class="callout">
+    <b>Finding the hash.</b> <code class="c">git branch -D</code> conveniently prints <code class="c">Deleted branch feature (was cad82be)</code> — that's the hash. If you missed it, <code class="c">git reflog</code> shows the <code class="c">checkout: moving from feature to main</code> line; the commit just above it is the branch's last tip. Then <code class="c">git branch feature cad82be</code> resurrects it. (<code class="c">git checkout cad82be</code> followed by <code class="c">git switch -c feature</code> works too.)
+  </div>
+
+  <h2>5 · More recovery recipes</h2>
+  <p>The pattern is always the same: <b>find the hash in the reflog, then point something at it.</b></p>
+
+  <h3>Commits orphaned by a rebase</h3>
+  <p>A rebase replays your commits as new-hash copies and leaves the originals unreferenced (see the <a href="rebase.html">rebase explainer</a>). If a rebase went wrong — bad conflict resolution, dropped the wrong line — the pre-rebase tip is in the reflog:</p>
+  <div class="todo"><span class="cmt"># find the entry just before the rebase started</span>
+git reflog
+<span class="cmt">#  <span class="hash">a1b2c3d</span> <span class="ptr">HEAD@{0}</span>: rebase (finish): returning to refs/heads/feature</span>
+<span class="cmt">#  <span class="hash">9f8e7d6</span> <span class="ptr">HEAD@{5}</span>: rebase (start): checkout main      ← HEAD was here before</span>
+<span class="cmt"># option A: move the branch back to the pre-rebase tip</span>
+git reset --hard <span class="ptr">HEAD@{5}</span>
+<span class="cmt"># option B: inspect first, then branch off the good hash</span>
+git checkout 9f8e7d6
+git switch -c feature-recovered</div>
+
+  <h3>A commit you <code class="c">--amend</code>ed away</h3>
+  <p><code class="c">git commit --amend</code> does not edit a commit in place — it creates a <b>replacement</b> commit and moves the branch to it. The original (with the old message or the code you amended out) is orphaned but logged:</p>
+  <div class="todo"><span class="hash">5574632</span> <span class="ptr">HEAD@{0}</span>: <span class="op">commit (amend)</span>: amended message
+<span class="hash">0049d32</span> <span class="ptr">HEAD@{1}</span>: <span class="op">commit (initial)</span>: original message   <span class="cmt">← the pre-amend commit</span>
+<span class="cmt"># get the original content back</span>
+git show <span class="ptr">HEAD@{1}</span>
+git reset --hard <span class="ptr">HEAD@{1}</span>   <span class="cmt"># or cherry-pick / branch off the hash</span></div>
+
+  <div class="callout">
+    <b>Lost a commit that's truly orphaned?</b> If even the reflog entry is gone, <code class="c">git fsck --lost-found</code> scans the object database for <i>dangling commits</i> — unreferenced objects gc hasn't pruned yet — and lists their hashes for you to inspect with <code class="c">git show</code>. It's the last-resort net under the reflog net.
+  </div>
+
+  <h2>6 · How it relates to reset and rebase</h2>
+  <p>The reflog is the undo button behind both of git's "scary" history commands. <code class="c">reset</code> moves a branch pointer (see the <a href="reset.html">reset explainer</a>) and <code class="c">rebase</code> rewrites a series of commits (see the <a href="rebase.html">rebase explainer</a>) — and <i>both</i> record where HEAD was before they ran, so <code class="c">HEAD@{1}</code> (or the hash) walks you straight back. Knowing the reflog has your back is exactly what lets you use <code class="c">reset --hard</code> and <code class="c">rebase</code> without flinching.</p>
+
+  <h2>Check your understanding</h2>
+  <details class="reveal"><summary>After <code class="c">git reset --hard HEAD~3</code>, where is the commit you were just on, and how do you get back?</summary>
+    <div class="body">It is orphaned but intact in the object database, and the reset itself was logged. Because the reset is the new <code class="c">HEAD@{0}</code>, the commit you were on is now <code class="c">HEAD@{1}</code>. Recover with <code class="c">git reset --hard HEAD@{1}</code> (or use the hash shown in <code class="c">git reflog</code>). Note it is <i>not</i> at <code class="c">HEAD~1</code> — after the reset it is no longer an ancestor of HEAD.</div></details>
+  <details class="reveal"><summary>What's the difference between <code class="c">HEAD@{2}</code> and <code class="c">HEAD~2</code>?</summary>
+    <div class="body"><code class="c">HEAD~2</code> is <b>ancestry</b>: two parent-hops back in the commit graph — the same for everyone, an immutable fact about the history. <code class="c">HEAD@{2}</code> is the <b>reflog</b>: two HEAD-moves back in <i>your local</i> history of operations — it changes every time you do anything, and only exists on your machine. Tilde = graph/structure; curly braces = time/your moves.</div></details>
+  <details class="reveal"><summary>You cloned a teammate's repo to recover a commit they lost. Will their reflog help?</summary>
+    <div class="body">No. The reflog lives in <code class="c">.git/logs/</code> and is never transferred by <code class="c">push</code>, <code class="c">fetch</code>, or <code class="c">clone</code>. Your fresh clone has only its own (essentially empty) reflog. Only <i>their</i> local repo holds the reflog entry that points at their lost commit — they have to run the recovery themselves.</div></details>
+  <details class="reveal"><summary>Is a "lost" commit gone immediately after a destructive command?</summary>
+    <div class="body">No. The command only removed the references pointing to it; the commit object stays on disk, unreferenced. Git's garbage collector won't prune it until expiry — roughly 90 days while a reflog entry still references it, ~30 days once fully unreachable. Until then <code class="c">git reflog</code> (or <code class="c">git fsck --lost-found</code>) can find it.</div></details>
+
+  <footer>Part of the Git concepts set · step through each diagram, then read the callouts. See also <a href="reset.html">reset</a> and <a href="rebase.html">rebase</a>.</footer>
+</div>
+
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git reset --hard B"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block (reflog listing)
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+/* ---------------- Scene 1: bad reset --hard, then rescue ---------------- */
+makeScene(document.getElementById('scene-rescue'), [
+  {
+    narration:'Starting point. <b>main</b> is a clean line A→B→C→D with HEAD at <b>D</b>. C and D are real work you care about.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'}]
+  },
+  {
+    command:'git reset --hard B',
+    narration:'Disaster. You meant to unstage, but ran a <b>hard reset to B</b>. The <b>main</b> pointer (and HEAD) snap back to B; your working tree is wiped to B. C and D are now <b>orphaned</b> — but they are still on disk.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'ghost'},{id:'D',col:3,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  },
+  {
+    command:'git reflog',
+    narration:'Don\'t panic — read the reflog. The reset is logged as <b>HEAD@{0}</b>. One line down, <b>HEAD@{1}</b> records exactly where HEAD was an instant before: at commit <b>D</b> (hash <code class="c">6fac19d</code>). That\'s your way back.',
+    todo:'<span class="hash">cf529a5</span> <span class="ptr hl">HEAD@{0}</span>: <span class="op">reset</span>: moving to B\n<span class="hash">6fac19d</span> <span class="ptr hl">HEAD@{1}</span>: <span class="op">commit</span>: commit D   <span class="cmt">← HEAD was here, on D</span>\n<span class="hash">4036700</span> <span class="ptr">HEAD@{2}</span>: <span class="op">commit</span>: commit C\n<span class="hash">cf529a5</span> <span class="ptr">HEAD@{3}</span>: <span class="op">commit</span>: commit B',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'ghost'},{id:'D',col:3,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  },
+  {
+    command:'git reset --hard HEAD@{1}',
+    narration:'Recovery. Hard-reset to <b>HEAD@{1}</b> (or to D\'s hash, <code class="c">6fac19d</code>). The <b>main</b> pointer jumps forward to D, C and D reconnect to the branch as real commits again, and your working tree is restored. Crisis averted.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'new'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'}]
+  },
+  {
+    narration:'<b>Recovered.</b> History reads A→B→C→D exactly as before. Nothing was ever truly deleted — the reset only moved a pointer, and the reflog remembered where it had been.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'new'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene 2: recover a deleted branch ---------------- */
+makeScene(document.getElementById('scene-branch'), [
+  {
+    narration:'You\'re on <b>feature</b>, sitting on commit <b>F</b> (a spike off B). <b>main</b> is back at C.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'F',col:2,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['F','B']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'F',kind:'head'}]
+  },
+  {
+    command:'git switch main',
+    narration:'You switch back to <b>main</b>. HEAD now follows <b>main</b> to C. (This checkout is itself logged in the reflog — that\'s what will save you.)',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'F',col:2,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['F','B']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'feature',at:'F',kind:'branch'}]
+  },
+  {
+    command:'git branch -D feature',
+    narration:'You delete the branch to tidy up. The <b>feature</b> pointer is gone, so <b>F</b> is orphaned — but git prints <code class="c">Deleted branch feature (was cad82be)</code>, and the reflog still has it.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'F',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B'],['F','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git reflog',
+    narration:'The reflog shows the <b>checkout</b> moving off feature; the line just above it carries F\'s hash <code class="c">cad82be</code>. That\'s the commit to rebuild the branch on.',
+    todo:'<span class="hash">4036700</span> <span class="ptr">HEAD@{0}</span>: <span class="op">checkout</span>: moving from feature to main\n<span class="hash hl">cad82be</span> <span class="ptr">HEAD@{1}</span>: <span class="op">commit</span>: feature work   <span class="cmt">← F\'s last tip</span>\n<span class="hash">cf529a5</span> <span class="ptr">HEAD@{2}</span>: <span class="op">checkout</span>: moving from main to feature',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'F',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B'],['F','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git branch feature cad82be',
+    narration:'Point a fresh <b>feature</b> branch at that hash and F is reattached — fully recovered, with its commit intact. <code class="c">main</code> never moved.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'F',col:2,row:0,kind:'new'}
+    ],
+    edges:[['B','A'],['C','B'],['F','B']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'feature',at:'F',kind:'branch'}]
+  }
+]);
+</script>
+</body>
+</html>

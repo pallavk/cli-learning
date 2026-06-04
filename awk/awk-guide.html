@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>awk Field Guide</title>
+<style>
+  :root {
+    --bg: #1a1b1e;
+    --panel: #232428;
+    --panel-2: #2b2d31;
+    --border: #3a3c42;
+    --text: #e4e4e7;
+    --muted: #9a9ba1;
+    --accent: #5bc8af;
+    --accent-dim: rgba(91, 200, 175, 0.14);
+    --key-bg: #15161a;
+    --good: #5bc8af;
+    --bad: #e07a6b;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 28px; }
+  h1 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    letter-spacing: -0.5px;
+    font-weight: 650;
+  }
+  h1 .dot { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0; font-size: 15px; }
+  .prefix-note {
+    margin-top: 18px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .prefix-note strong { color: var(--accent); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin: 28px 0 0; flex-wrap: wrap; }
+  .tab {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 550;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: color .15s, background .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); background: var(--panel); }
+  .panel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 8px 22px 22px;
+  }
+  .panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2.section-title { font-size: 17px; margin: 22px 0 4px; font-weight: 600; }
+  h2.section-title:first-child { margin-top: 16px; }
+  .section-desc { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.keys { white-space: nowrap; width: 1%; }
+  td.desc { color: var(--text); }
+
+  kbd {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    color: var(--accent);
+    display: inline-block;
+    line-height: 1.5;
+  }
+  .seq { color: var(--muted); margin: 0 3px; font-size: 12px; }
+  code.cmd {
+    font-family: var(--mono);
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+    color: #d8b4fe;
+  }
+  .callout {
+    background: var(--panel-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .callout b { color: var(--text); }
+
+  /* Quiz */
+  .quiz-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .progress-line { color: var(--muted); font-size: 14px; }
+  .score-pill {
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .q-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    margin-top: 18px;
+  }
+  .q-num { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+  .q-text { font-size: 17px; margin: 8px 0 18px; }
+  .opts { display: grid; gap: 10px; }
+  .opt {
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .opt kbd { pointer-events: none; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+  .opt:disabled { cursor: default; }
+  .opt.correct { border-color: var(--good); background: rgba(91,200,175,.15); }
+  .opt.wrong { border-color: var(--bad); background: rgba(224,122,107,.13); }
+  .explain {
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: none;
+  }
+  .explain.show { display: block; }
+  .explain b { color: var(--text); }
+  .q-actions { margin-top: 18px; display: flex; gap: 10px; }
+  .btn {
+    background: var(--accent);
+    color: #11201c;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .result-card { text-align: center; padding: 40px 22px; }
+  .result-card .big { font-size: 44px; font-weight: 700; color: var(--accent); }
+  .result-card .msg { color: var(--muted); margin: 8px 0 20px; }
+  .hidden { display: none; }
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 30px; }
+
+  /* Quiz setup */
+  .setup-row { display: flex; align-items: center; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+  .setup-label { color: var(--muted); font-size: 13px; width: 80px; flex-shrink: 0; }
+  .seg { display: inline-flex; background: var(--key-bg); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg-btn {
+    border: none; background: transparent; color: var(--muted);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 550;
+    padding: 7px 14px; border-radius: 7px; cursor: pointer; transition: all .15s;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent); color: #11201c; }
+  .bank-info { color: var(--muted); font-size: 13px; margin: 18px 0 14px; }
+  .bank-info b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>awk Field Guide<span class="dot">.</span></h1>
+    <p class="sub">A practical reference for the pattern-scanning language &mdash; fields, records, and one-liners, with a quiz to test yourself.</p>
+    <div class="prefix-note">
+      awk processes input <strong>one record at a time</strong> (a record is normally one line). For every record it walks your
+      <strong>pattern { action }</strong> rules: if the pattern matches, the action runs. Each record is split into <strong>fields</strong>
+      on the field separator <code class="cmd">FS</code> (runs of whitespace by default), reachable as <code class="cmd">$1</code>, <code class="cmd">$2</code> &hellip; with <code class="cmd">$0</code> being the whole line.
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-target="intro">Introductory</button>
+    <button class="tab" data-target="inter">Intermediate</button>
+    <button class="tab" data-target="adv">Advanced</button>
+    <button class="tab" data-target="quiz">Test Me</button>
+  </nav>
+
+  <!-- INTRODUCTORY -->
+  <section class="panel active" id="intro">
+    <h2 class="section-title">The mental model</h2>
+    <p class="section-desc">An awk program is a list of <b>pattern { action }</b> rules. For each input record, awk tests every pattern; matching rules run their action. Omit the pattern and the action runs on every line; omit the action and the default is <code class="cmd">print $0</code>.</p>
+
+    <h2 class="section-title">Fields &amp; the whole line</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">$0</code></td><td class="desc">The entire current record (the whole line).</td></tr>
+      <tr><td class="keys"><code class="cmd">$1</code>, <code class="cmd">$2</code> &hellip;</td><td class="desc">The first, second &hellip; field of the record.</td></tr>
+      <tr><td class="keys"><code class="cmd">$NF</code></td><td class="desc">The <b>last</b> field &mdash; <code class="cmd">NF</code> is the field count, so <code class="cmd">$NF</code> dereferences it.</td></tr>
+      <tr><td class="keys"><code class="cmd">$(NF-1)</code></td><td class="desc">The second-to-last field.</td></tr>
+      <tr><td class="keys"><code class="cmd">awk '{print $1}' file</code></td><td class="desc">Print the first field of every line.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Whitespace is the default separator:</b> with no <code class="cmd">-F</code>, awk splits on runs of spaces and tabs, and leading/trailing whitespace is ignored. So <code class="cmd">"  a   b "</code> has exactly two fields.
+    </div>
+
+    <h2 class="section-title">Choosing a field separator</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">awk -F: '{print $1}' /etc/passwd</code></td><td class="desc">Split on a single colon &mdash; print the username column.</td></tr>
+      <tr><td class="keys"><code class="cmd">awk -F, '{print $2}' data.csv</code></td><td class="desc">Split on commas (simple CSV without quoted commas).</td></tr>
+      <tr><td class="keys"><code class="cmd">awk 'BEGIN{FS="\t"} {print $3}'</code></td><td class="desc">Set the separator to a tab inside <code class="cmd">BEGIN</code> instead of <code class="cmd">-F</code>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Printing</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">print $1, $2</code></td><td class="desc">Print two fields separated by <code class="cmd">OFS</code> (a space by default).</td></tr>
+      <tr><td class="keys"><code class="cmd">print $1 $2</code></td><td class="desc">No comma &mdash; the fields are <b>concatenated</b> with nothing between them.</td></tr>
+      <tr><td class="keys"><code class="cmd">print "hello", NR</code></td><td class="desc">Mix literal strings and variables; <code class="cmd">NR</code> is the line number.</td></tr>
+      <tr><td class="keys"><code class="cmd">printf "%-10s %5d\n", $1, $2</code></td><td class="desc"><code class="cmd">printf</code> for exact formatting; you supply the <code class="cmd">\n</code> yourself.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Comma vs no comma:</b> <code class="cmd">print $1, $2</code> inserts <code class="cmd">OFS</code> between the fields; <code class="cmd">print $1 $2</code> glues them together. This is the single most common beginner surprise.
+    </div>
+
+    <h2 class="section-title">Patterns: deciding which lines</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">/error/</code></td><td class="desc">Run on lines where <code class="cmd">$0</code> matches the regex <code class="cmd">error</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">$3 &gt; 100</code></td><td class="desc">Run when field 3, treated as a number, is greater than 100.</td></tr>
+      <tr><td class="keys"><code class="cmd">NR == 1</code></td><td class="desc">Run only on the first line (e.g. to skip or print a header).</td></tr>
+      <tr><td class="keys"><code class="cmd">$1 == "root"</code></td><td class="desc">Exact string comparison on the first field.</td></tr>
+    </table>
+
+    <h2 class="section-title">Running awk</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">awk '{print}' file</code></td><td class="desc">Program in single quotes, file as an argument.</td></tr>
+      <tr><td class="keys"><code class="cmd">cat file | awk '{print $1}'</code></td><td class="desc">awk happily reads from a pipe / stdin.</td></tr>
+      <tr><td class="keys"><code class="cmd">awk -f script.awk file</code></td><td class="desc">Load a longer program from a file with <code class="cmd">-f</code>.</td></tr>
+    </table>
+  </section>
+
+  <!-- INTERMEDIATE -->
+  <section class="panel" id="inter">
+    <h2 class="section-title">Built-in variables</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">NR</code></td><td class="desc">Number of records read so far &mdash; the running line count across <b>all</b> input files.</td></tr>
+      <tr><td class="keys"><code class="cmd">FNR</code></td><td class="desc">Like <code class="cmd">NR</code> but <b>resets to 1</b> at the start of each new file.</td></tr>
+      <tr><td class="keys"><code class="cmd">NF</code></td><td class="desc">Number of fields in the current record.</td></tr>
+      <tr><td class="keys"><code class="cmd">FS</code></td><td class="desc">Input field separator (default: runs of whitespace).</td></tr>
+      <tr><td class="keys"><code class="cmd">OFS</code></td><td class="desc">Output field separator used by <code class="cmd">print a, b</code> (default: a single space).</td></tr>
+      <tr><td class="keys"><code class="cmd">RS</code></td><td class="desc">Input record separator (default: newline). Set to <code class="cmd">""</code> for paragraph mode.</td></tr>
+      <tr><td class="keys"><code class="cmd">ORS</code></td><td class="desc">Output record separator appended by <code class="cmd">print</code> (default: newline).</td></tr>
+      <tr><td class="keys"><code class="cmd">FILENAME</code></td><td class="desc">Name of the file currently being read.</td></tr>
+    </table>
+    <div class="callout">
+      <b>OFS gotcha:</b> changing <code class="cmd">OFS</code> only affects a line when you <b>rebuild</b> a field. <code class="cmd">{$1=$1; print}</code> forces awk to re-split and re-join <code class="cmd">$0</code> using the new <code class="cmd">OFS</code>; without touching a field, <code class="cmd">print $0</code> comes out unchanged.
+    </div>
+
+    <h2 class="section-title">BEGIN and END blocks</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">BEGIN { ... }</code></td><td class="desc">Runs once before any input is read &mdash; set <code class="cmd">FS</code>, print headers, init counters.</td></tr>
+      <tr><td class="keys"><code class="cmd">END { ... }</code></td><td class="desc">Runs once after all input &mdash; print totals, summaries.</td></tr>
+      <tr><td class="keys"><code class="cmd">awk '{s+=$1} END{print s}'</code></td><td class="desc">Sum the first column, print the total at the end.</td></tr>
+      <tr><td class="keys"><code class="cmd">END {print NR}</code></td><td class="desc">In <code class="cmd">END</code>, <code class="cmd">NR</code> holds the total number of records &mdash; a line counter.</td></tr>
+    </table>
+
+    <h2 class="section-title">Regex patterns</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">/^[0-9]+$/</code></td><td class="desc">Whole-line match: lines that are entirely digits.</td></tr>
+      <tr><td class="keys"><code class="cmd">$2 ~ /^ERR/</code></td><td class="desc"><code class="cmd">~</code> tests whether field 2 <b>matches</b> the regex.</td></tr>
+      <tr><td class="keys"><code class="cmd">$1 !~ /test/</code></td><td class="desc"><code class="cmd">!~</code> is "does not match".</td></tr>
+      <tr><td class="keys"><code class="cmd">/start/,/end/</code></td><td class="desc">A <b>range</b> pattern: matches every line from one matching <code class="cmd">start</code> through the next matching <code class="cmd">end</code>, inclusive.</td></tr>
+    </table>
+
+    <h2 class="section-title">Arithmetic &amp; string functions</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">length($0)</code></td><td class="desc">Length of a string; <code class="cmd">length</code> alone means <code class="cmd">length($0)</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">substr($1, 2, 3)</code></td><td class="desc">3 characters starting at position 2 (awk strings are <b>1-indexed</b>).</td></tr>
+      <tr><td class="keys"><code class="cmd">index($0, "x")</code></td><td class="desc">Position of the first <code class="cmd">"x"</code>, or 0 if not found.</td></tr>
+      <tr><td class="keys"><code class="cmd">toupper($1)</code> / <code class="cmd">tolower($1)</code></td><td class="desc">Case conversion.</td></tr>
+      <tr><td class="keys"><code class="cmd">split($0, a, ":")</code></td><td class="desc">Split a string into array <code class="cmd">a</code> on a separator; returns the element count.</td></tr>
+      <tr><td class="keys"><code class="cmd">sub(/x/, "y")</code></td><td class="desc">Replace the <b>first</b> match of <code class="cmd">x</code> in <code class="cmd">$0</code>; returns 1 or 0.</td></tr>
+      <tr><td class="keys"><code class="cmd">gsub(/x/, "y", $2)</code></td><td class="desc"><b>Global</b> replace in field 2; returns the number of substitutions made and edits in place.</td></tr>
+    </table>
+    <div class="callout">
+      <b>sub/gsub mutate:</b> they change their target ( <code class="cmd">$0</code> by default) in place and return a <b>count</b>, not the new string. Use <code class="cmd">gensub</code> (gawk) if you want a value returned without modifying the original.
+    </div>
+
+    <h2 class="section-title">Control flow</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">if (x &gt; 0) {...} else {...}</code></td><td class="desc">Standard conditional.</td></tr>
+      <tr><td class="keys"><code class="cmd">for (i=1; i&lt;=NF; i++)</code></td><td class="desc">C-style loop, e.g. over every field.</td></tr>
+      <tr><td class="keys"><code class="cmd">while (cond) {...}</code></td><td class="desc">Loop while a condition holds.</td></tr>
+      <tr><td class="keys"><code class="cmd">next</code></td><td class="desc">Stop processing the current record and move to the next input line.</td></tr>
+      <tr><td class="keys"><code class="cmd">exit</code></td><td class="desc">Stop reading input; jumps to the <code class="cmd">END</code> block (if any), then quits.</td></tr>
+    </table>
+  </section>
+
+  <!-- ADVANCED -->
+  <section class="panel" id="adv">
+    <h2 class="section-title">Associative arrays</h2>
+    <p class="section-desc">awk arrays are always associative &mdash; subscripts are strings, even numeric-looking ones. They are perfect for counting and grouping.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">count[$1]++</code></td><td class="desc">Tally occurrences of each value of field 1.</td></tr>
+      <tr><td class="keys"><code class="cmd">for (k in arr) print k, arr[k]</code></td><td class="desc">Iterate keys (order is unspecified) and print each key with its value.</td></tr>
+      <tr><td class="keys"><code class="cmd">if (k in arr)</code></td><td class="desc">Test membership <b>without</b> creating the key (unlike <code class="cmd">arr[k]</code>, which would).</td></tr>
+      <tr><td class="keys"><code class="cmd">delete arr[k]</code></td><td class="desc">Remove one element; <code class="cmd">delete arr</code> clears the whole array (gawk).</td></tr>
+    </table>
+    <div class="callout">
+      <b>Dedup idiom:</b> <code class="cmd">awk '!seen[$0]++'</code> prints each line only the first time it appears. The first time, <code class="cmd">seen[$0]</code> is 0 (so <code class="cmd">!0</code> is true and it prints), then the <code class="cmd">++</code> bumps it so later copies are suppressed.
+    </div>
+
+    <h2 class="section-title">User-defined functions</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">function max(a, b) { return a&gt;b ? a : b }</code></td><td class="desc">Define a function; call it like any built-in.</td></tr>
+      <tr><td class="keys"><code class="cmd">function f(x,   tmp)</code></td><td class="desc">Extra params after a gap are <b>local</b> variables &mdash; awk has no other way to scope locals.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Scoping quirk:</b> scalars pass by value, arrays pass by reference. To get a local variable inside a function, declare it as an extra (unused-by-caller) parameter &mdash; conventionally separated by extra spaces in the parameter list.
+    </div>
+
+    <h2 class="section-title">Two files &amp; the FNR==NR idiom</h2>
+    <p class="section-desc">A classic awk pattern: read a lookup file fully, then process a second file using what you learned.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">awk 'FNR==NR{a[$1]=1; next} ($1 in a)' f1 f2</code></td><td class="desc">While on the <b>first</b> file (<code class="cmd">FNR==NR</code>), load keys into <code class="cmd">a</code>; on the second file, print lines whose field 1 is in <code class="cmd">a</code>.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Why it works:</b> <code class="cmd">NR</code> counts across all files while <code class="cmd">FNR</code> resets per file, so <code class="cmd">FNR==NR</code> is only true while reading the <b>first</b> file. The <code class="cmd">next</code> stops fall-through so the second rule runs only on later files.
+    </div>
+
+    <h2 class="section-title">getline</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">getline</code></td><td class="desc">Read the next record into <code class="cmd">$0</code> (updates <code class="cmd">NF</code>, <code class="cmd">NR</code>, <code class="cmd">FNR</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">getline line &lt; "file"</code></td><td class="desc">Read one line from another file into the variable <code class="cmd">line</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">"date" | getline d</code></td><td class="desc">Run a shell command and capture its output into <code class="cmd">d</code>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Number formatting: OFMT &amp; CONVFMT</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">OFMT</code></td><td class="desc">Format used when a number is <b>printed</b> with <code class="cmd">print</code> (default <code class="cmd">"%.6g"</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">CONVFMT</code></td><td class="desc">Format used when a number is <b>converted to a string</b> in other contexts (e.g. as an array subscript). Also defaults to <code class="cmd">"%.6g"</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">sprintf("%.2f", x)</code></td><td class="desc">Return a formatted string without printing &mdash; <code class="cmd">printf</code>'s value-returning sibling.</td></tr>
+    </table>
+
+    <h2 class="section-title">Reassigning records, RS &amp; ORS</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">BEGIN{RS=""; FS="\n"}</code></td><td class="desc">Paragraph mode: records are blank-line-separated blocks, fields are their lines.</td></tr>
+      <tr><td class="keys"><code class="cmd">BEGIN{ORS="\t"}</code></td><td class="desc">Join printed records with tabs instead of newlines.</td></tr>
+      <tr><td class="keys"><code class="cmd">{NF=3; print}</code></td><td class="desc">Setting <code class="cmd">NF</code> truncates (or pads) the record's fields, rebuilding <code class="cmd">$0</code> with <code class="cmd">OFS</code>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Handy one-liners</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">awk '{s+=$2} END{print s}' f</code></td><td class="desc">Sum column 2.</td></tr>
+      <tr><td class="keys"><code class="cmd">awk '{c[$1]++} END{for(k in c) print k, c[k]}'</code></td><td class="desc">Count occurrences per value of field 1.</td></tr>
+      <tr><td class="keys"><code class="cmd">awk '!seen[$0]++' f</code></td><td class="desc">Remove duplicate lines, keeping first occurrence (no sort needed).</td></tr>
+      <tr><td class="keys"><code class="cmd">awk 'NF' f</code></td><td class="desc">Print only non-blank lines (<code class="cmd">NF</code> is 0, i.e. false, on empty lines).</td></tr>
+      <tr><td class="keys"><code class="cmd">awk 'END{print NR}' f</code></td><td class="desc">Count lines (a <code class="cmd">wc -l</code> equivalent).</td></tr>
+      <tr><td class="keys"><code class="cmd">awk -F, '{print $1, $3}' OFS=, f</code></td><td class="desc">Print a subset of CSV columns, comma-separated.</td></tr>
+    </table>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="panel" id="quiz">
+    <div id="quiz-setup">
+      <h2 class="section-title">Test yourself</h2>
+      <p class="section-desc">Pick a difficulty and how many questions you want. Each round draws a fresh random set from the bank, and the answer order is shuffled too.</p>
+
+      <div class="setup-row">
+        <span class="setup-label">Difficulty</span>
+        <div class="seg" id="level-seg">
+          <button class="seg-btn active" data-level="beginner">Beginner</button>
+          <button class="seg-btn" data-level="intermediate">Intermediate</button>
+          <button class="seg-btn" data-level="advanced">Advanced</button>
+          <button class="seg-btn" data-level="mixed">Mixed</button>
+        </div>
+      </div>
+
+      <div class="setup-row">
+        <span class="setup-label">Questions</span>
+        <div class="seg" id="count-seg">
+          <button class="seg-btn active" data-count="5">5</button>
+          <button class="seg-btn" data-count="10">10</button>
+          <button class="seg-btn" data-count="15">15</button>
+          <button class="seg-btn" data-count="0">All</button>
+        </div>
+      </div>
+
+      <p class="bank-info" id="bank-info"></p>
+      <button class="btn" id="start-quiz">Start quiz</button>
+    </div>
+
+    <div id="quiz-play" class="hidden">
+      <div class="quiz-head">
+        <div class="progress-line" id="progress">Question 1</div>
+        <div class="score-pill" id="score">Score: 0</div>
+      </div>
+      <div id="quiz-body"></div>
+    </div>
+  </section>
+
+  <footer>Default field separator assumed throughout: runs of whitespace. Quiz questions live in <code class="cmd">questions.js</code>.</footer>
+</div>
+
+<!-- Question bank: edit questions.js to add/remove questions -->
+<script src="questions.js"></script>
+<script>
+  // ---- Tabs ----
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.target).classList.add('active');
+  }));
+
+  // ---- Quiz state ----
+  const BANK = window.AWK_QUESTIONS || [];
+  let chosenLevel = 'beginner';
+  let chosenCount = 5;
+  let QUESTIONS = [];           // the active drawn set, with options pre-shuffled
+  let idx = 0, score = 0, answered = false;
+
+  const setupEl = document.getElementById('quiz-setup');
+  const playEl = document.getElementById('quiz-play');
+  const bankInfo = document.getElementById('bank-info');
+  const body = document.getElementById('quiz-body');
+  const progressEl = document.getElementById('progress');
+  const scoreEl = document.getElementById('score');
+
+  // Fisher-Yates shuffle (returns a new array)
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function poolFor(level) {
+    return level === 'mixed' ? BANK : BANK.filter(q => q.level === level);
+  }
+
+  function updateBankInfo() {
+    const pool = poolFor(chosenLevel);
+    const want = chosenCount === 0 ? pool.length : Math.min(chosenCount, pool.length);
+    bankInfo.innerHTML = `Bank has <b>${pool.length}</b> ${chosenLevel === 'mixed' ? 'total' : chosenLevel} questions. This round will draw <b>${want}</b>.`;
+  }
+
+  // Segmented control wiring
+  function wireSeg(segId, onPick) {
+    const seg = document.getElementById(segId);
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onPick(btn);
+        updateBankInfo();
+      });
+    });
+  }
+  wireSeg('level-seg', btn => { chosenLevel = btn.dataset.level; });
+  wireSeg('count-seg', btn => { chosenCount = +btn.dataset.count; });
+
+  // Build the active question set: draw random questions, shuffle each one's options
+  function buildSet() {
+    const pool = poolFor(chosenLevel);
+    const drawn = shuffle(pool).slice(0, chosenCount === 0 ? pool.length : chosenCount);
+    QUESTIONS = drawn.map(item => {
+      const correctText = item.opts[item.correct];
+      const shuffledOpts = shuffle(item.opts);
+      return {
+        q: item.q,
+        opts: shuffledOpts,
+        correct: shuffledOpts.indexOf(correctText),
+        why: item.why,
+        level: item.level
+      };
+    });
+  }
+
+  document.getElementById('start-quiz').addEventListener('click', () => {
+    buildSet();
+    if (!QUESTIONS.length) { bankInfo.textContent = 'No questions available for that selection.'; return; }
+    idx = 0; score = 0;
+    setupEl.classList.add('hidden');
+    playEl.classList.remove('hidden');
+    render();
+  });
+
+  // ---- Quiz engine ----
+  function render() {
+    answered = false;
+    const item = QUESTIONS[idx];
+    progressEl.textContent = `Question ${idx + 1} of ${QUESTIONS.length}`;
+    scoreEl.textContent = `Score: ${score}`;
+    const badge = item.level ? `<span style="color:var(--muted);font-weight:400;text-transform:capitalize"> &middot; ${item.level}</span>` : '';
+    body.innerHTML = `
+      <div class="q-card">
+        <div class="q-num">Question ${idx + 1}${badge}</div>
+        <div class="q-text">${item.q}</div>
+        <div class="opts">
+          ${item.opts.map((o, i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}
+        </div>
+        <div class="explain" id="explain"><b>Why:</b> ${item.why}</div>
+        <div class="q-actions">
+          <button class="btn" id="next" disabled>${idx === QUESTIONS.length - 1 ? 'See results' : 'Next question'}</button>
+          <button class="btn ghost" id="quit">Quit</button>
+        </div>
+      </div>`;
+
+    body.querySelectorAll('.opt').forEach(btn => btn.addEventListener('click', () => choose(btn)));
+    document.getElementById('next').addEventListener('click', next);
+    document.getElementById('quit').addEventListener('click', backToSetup);
+  }
+
+  function choose(btn) {
+    if (answered) return;
+    answered = true;
+    const item = QUESTIONS[idx];
+    const chosen = +btn.dataset.i;
+    const opts = body.querySelectorAll('.opt');
+    opts.forEach((o, i) => {
+      o.disabled = true;
+      if (i === item.correct) o.classList.add('correct');
+      if (i === chosen && i !== item.correct) o.classList.add('wrong');
+    });
+    if (chosen === item.correct) score++;
+    scoreEl.textContent = `Score: ${score}`;
+    document.getElementById('explain').classList.add('show');
+    document.getElementById('next').disabled = false;
+  }
+
+  function next() {
+    if (idx < QUESTIONS.length - 1) { idx++; render(); }
+    else results();
+  }
+
+  function results() {
+    const total = QUESTIONS.length;
+    const pct = Math.round((score / total) * 100);
+    let msg;
+    if (pct === 100) msg = "Flawless. You think in pattern { action }.";
+    else if (pct >= 75) msg = "Strong. A couple of built-ins to nail down.";
+    else if (pct >= 50) msg = "Decent start. Revisit the guide tabs and retry.";
+    else msg = "Worth another pass through the guide. Then try again.";
+    progressEl.textContent = "Complete";
+    body.innerHTML = `
+      <div class="q-card result-card">
+        <div class="big">${score} / ${total}</div>
+        <div class="msg">${msg} (${pct}%)</div>
+        <div class="q-actions" style="justify-content:center">
+          <button class="btn" id="again">New round</button>
+          <button class="btn ghost" id="change">Change settings</button>
+        </div>
+      </div>`;
+    document.getElementById('again').addEventListener('click', () => {
+      buildSet(); idx = 0; score = 0; render();
+    });
+    document.getElementById('change').addEventListener('click', backToSetup);
+  }
+
+  function backToSetup() {
+    playEl.classList.add('hidden');
+    setupEl.classList.remove('hidden');
+  }
+
+  // Init
+  if (!BANK.length) {
+    bankInfo.innerHTML = '&#9888; Question bank failed to load. Make sure <code class="cmd">questions.js</code> sits next to this HTML file.';
+    document.getElementById('start-quiz').disabled = true;
+  } else {
+    updateBankInfo();
+  }
+</script>
+</body>
+</html>

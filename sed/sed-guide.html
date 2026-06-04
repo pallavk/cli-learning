@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sed Field Guide</title>
+<style>
+  :root {
+    --bg: #1a1b1e;
+    --panel: #232428;
+    --panel-2: #2b2d31;
+    --border: #3a3c42;
+    --text: #e4e4e7;
+    --muted: #9a9ba1;
+    --accent: #5bc8af;
+    --accent-dim: rgba(91, 200, 175, 0.14);
+    --key-bg: #15161a;
+    --good: #5bc8af;
+    --bad: #e07a6b;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 28px; }
+  h1 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    letter-spacing: -0.5px;
+    font-weight: 650;
+  }
+  h1 .dot { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0; font-size: 15px; }
+  .prefix-note {
+    margin-top: 18px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .prefix-note strong { color: var(--accent); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin: 28px 0 0; flex-wrap: wrap; }
+  .tab {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 550;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: color .15s, background .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); background: var(--panel); }
+  .panel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 8px 22px 22px;
+  }
+  .panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2.section-title { font-size: 17px; margin: 22px 0 4px; font-weight: 600; }
+  h2.section-title:first-child { margin-top: 16px; }
+  .section-desc { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.keys { white-space: nowrap; width: 1%; }
+  td.desc { color: var(--text); }
+
+  kbd {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    color: var(--accent);
+    display: inline-block;
+    line-height: 1.5;
+  }
+  .seq { color: var(--muted); margin: 0 3px; font-size: 12px; }
+  code.cmd {
+    font-family: var(--mono);
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+    color: #d8b4fe;
+  }
+  .callout {
+    background: var(--panel-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .callout b { color: var(--text); }
+
+  /* Quiz */
+  .quiz-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .progress-line { color: var(--muted); font-size: 14px; }
+  .score-pill {
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .q-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    margin-top: 18px;
+  }
+  .q-num { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+  .q-text { font-size: 17px; margin: 8px 0 18px; }
+  .opts { display: grid; gap: 10px; }
+  .opt {
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .opt kbd { pointer-events: none; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+  .opt:disabled { cursor: default; }
+  .opt.correct { border-color: var(--good); background: rgba(91,200,175,.15); }
+  .opt.wrong { border-color: var(--bad); background: rgba(224,122,107,.13); }
+  .explain {
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: none;
+  }
+  .explain.show { display: block; }
+  .explain b { color: var(--text); }
+  .q-actions { margin-top: 18px; display: flex; gap: 10px; }
+  .btn {
+    background: var(--accent);
+    color: #11201c;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .result-card { text-align: center; padding: 40px 22px; }
+  .result-card .big { font-size: 44px; font-weight: 700; color: var(--accent); }
+  .result-card .msg { color: var(--muted); margin: 8px 0 20px; }
+  .hidden { display: none; }
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 30px; }
+
+  /* Quiz setup */
+  .setup-row { display: flex; align-items: center; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+  .setup-label { color: var(--muted); font-size: 13px; width: 80px; flex-shrink: 0; }
+  .seg { display: inline-flex; background: var(--key-bg); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg-btn {
+    border: none; background: transparent; color: var(--muted);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 550;
+    padding: 7px 14px; border-radius: 7px; cursor: pointer; transition: all .15s;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent); color: #11201c; }
+  .bank-info { color: var(--muted); font-size: 13px; margin: 18px 0 14px; }
+  .bank-info b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>sed Field Guide<span class="dot">.</span></h1>
+    <p class="sub">A practical reference for the stream editor &mdash; substitution, addresses, and the hold space &mdash; with a quiz to test yourself.</p>
+    <div class="prefix-note">
+      <strong>Mental model:</strong> sed reads input <strong>one line at a time</strong> into a buffer called the <strong>pattern space</strong>, runs your script against it, then by default <strong>prints the line</strong> and moves on. The <code class="cmd">-n</code> option turns that auto-print off, so nothing appears unless you ask for it with <code class="cmd">p</code>. Examples here assume <strong>GNU sed</strong> unless BSD/macOS is called out.
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-target="intro">Introductory</button>
+    <button class="tab" data-target="inter">Intermediate</button>
+    <button class="tab" data-target="adv">Advanced</button>
+    <button class="tab" data-target="quiz">Test Me</button>
+  </nav>
+
+  <!-- INTRODUCTORY -->
+  <section class="panel active" id="intro">
+    <h2 class="section-title">The substitute command</h2>
+    <p class="section-desc">The workhorse of sed is <code class="cmd">s/regexp/replacement/</code>. It finds text matching the regexp and swaps in the replacement.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed 's/cat/dog/' file</code></td><td class="desc">Replace the <b>first</b> "cat" on each line with "dog". The file itself is not changed &mdash; the result goes to stdout.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/cat/dog/g' file</code></td><td class="desc">The <code class="cmd">g</code> flag replaces <b>all</b> occurrences on each line (global <i>within a line</i>, not across the whole file).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/cat/dog/2' file</code></td><td class="desc">Replace only the <b>2nd</b> match on each line. Numeric flag = the Nth occurrence.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/cat/dog/gI' file</code></td><td class="desc"><code class="cmd">I</code> makes the match <b>case-insensitive</b> (GNU); combine flags freely.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's#/usr#/opt#' file</code></td><td class="desc">Any character can be the delimiter. Using <code class="cmd">#</code> avoids escaping the slashes in paths.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Key fact:</b> without <code class="cmd">g</code>, only the <b>first</b> match on each line is replaced. With <code class="cmd">g</code>, every match on that line is replaced. Neither stops sed from processing the rest of the lines.
+    </div>
+
+    <h2 class="section-title">Printing &amp; suppressing</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed '' file</code></td><td class="desc">An empty script &mdash; auto-print echoes the file unchanged (a no-op, like <code class="cmd">cat</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -n '4p' file</code></td><td class="desc">Print only line 4. <code class="cmd">-n</code> silences auto-print, then <code class="cmd">p</code> explicitly prints.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -n '$p' file</code></td><td class="desc">Print just the last line (<code class="cmd">$</code> = last line). Like <code class="cmd">tail -1</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '2p' file</code></td><td class="desc">Without <code class="cmd">-n</code>, line 2 prints <b>twice</b> &mdash; once by auto-print, once by <code class="cmd">p</code>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Deleting lines</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed '3d' file</code></td><td class="desc">Delete line 3 (just omit it from output).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '$d' file</code></td><td class="desc">Delete the last line.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '2,5d' file</code></td><td class="desc">Delete lines 2 through 5 (a comma range, inclusive).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '/^$/d' file</code></td><td class="desc">Delete blank lines (<code class="cmd">^$</code> matches an empty line).</td></tr>
+    </table>
+
+    <h2 class="section-title">Running more than one command</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed -e 's/a/b/' -e 's/c/d/' file</code></td><td class="desc">Each <code class="cmd">-e</code> adds a script. They run in order on every line.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/a/b/;s/c/d/' file</code></td><td class="desc">A semicolon separates commands inside one script &mdash; same effect.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Memory hook:</b> sed = <b>s</b>tream <b>ed</b>itor. It streams a file past your edits and prints the result. It does not touch the original unless you add <code class="cmd">-i</code> (covered in Intermediate).
+    </div>
+  </section>
+
+  <!-- INTERMEDIATE -->
+  <section class="panel" id="inter">
+    <h2 class="section-title">Addresses: where commands apply</h2>
+    <p class="section-desc">Put an address before a command to restrict it. No address means "every line".</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed -n '1,3p' file</code></td><td class="desc">Line-number range: print lines 1&ndash;3 (like <code class="cmd">head -3</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -n '10,$p' file</code></td><td class="desc">From line 10 to the last line (like <code class="cmd">tail -n +10</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '/error/d' file</code></td><td class="desc">Regex address: delete every line containing "error".</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -n '/START/,/END/p' file</code></td><td class="desc">Regex range: print from a line matching START through the next line matching END.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -n '2~3p' file</code></td><td class="desc">GNU <code class="cmd">first~step</code>: line 2, then every 3rd after (2, 5, 8&hellip;).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '3!d' file</code></td><td class="desc"><code class="cmd">!</code> negates the address &mdash; delete every line <b>except</b> line 3.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Scoping a substitution:</b> <code class="cmd">sed '/error/s/foo/bar/' file</code> runs the substitution only on lines containing "error". The address comes first, then the command.
+    </div>
+
+    <h2 class="section-title">Editing files in place</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed -i 's/a/b/' file</code></td><td class="desc"><b>GNU</b>: <code class="cmd">-i</code> takes <b>no argument</b> and rewrites the file directly.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -i.bak 's/a/b/' file</code></td><td class="desc"><b>GNU</b>: attach a suffix to also save a backup as <code class="cmd">file.bak</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -i '' 's/a/b/' file</code></td><td class="desc"><b>BSD/macOS</b>: <code class="cmd">-i</code> <b>requires</b> a suffix argument; pass an empty string for no backup.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Portability trap:</b> GNU <code class="cmd">-i</code> with no arg and BSD <code class="cmd">-i</code> with an empty-string arg are <b>incompatible</b>. <code class="cmd">sed -i 's/a/b/' file</code> works on Linux but treats <code class="cmd">s/a/b/</code> as the backup suffix on macOS.
+    </div>
+
+    <h2 class="section-title">Regex flavours: BRE vs ERE</h2>
+    <p class="section-desc">By default sed uses <b>basic</b> regular expressions (BRE). <code class="cmd">-E</code> (or GNU's <code class="cmd">-r</code>) switches to <b>extended</b> (ERE).</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed 's/[0-9]\+/#/g' file</code></td><td class="desc">BRE: <code class="cmd">+ ? ( ) { }</code> are literal &mdash; escape them to get their special meaning (<code class="cmd">\+</code> = one or more).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -E 's/[0-9]+/#/g' file</code></td><td class="desc">ERE: <code class="cmd">+ ? ( ) { } |</code> are special by default &mdash; no backslashes needed.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/\(ab\)\1/X/' file</code></td><td class="desc">BRE groups use <code class="cmd">\(...\)</code>; <code class="cmd">\1</code> back-references the first group.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -E 's/(ab)\1/X/' file</code></td><td class="desc">ERE groups use plain <code class="cmd">(...)</code>; the back-reference is still <code class="cmd">\1</code>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Back-references &amp; the whole match</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed -E 's/(\w+) (\w+)/\2 \1/' file</code></td><td class="desc">Swap two words: <code class="cmd">\1</code>, <code class="cmd">\2</code> recall captured groups in the replacement.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/[0-9]*/(&)/' file</code></td><td class="desc"><code class="cmd">&</code> in the replacement = the <b>entire matched text</b>. Escape it as <code class="cmd">\&</code> for a literal ampersand.</td></tr>
+    </table>
+
+    <h2 class="section-title">Insert, append, change &amp; transliterate</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed '/foo/a text' file</code></td><td class="desc"><code class="cmd">a</code> appends a new line of text <b>after</b> each matching line.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '/foo/i text' file</code></td><td class="desc"><code class="cmd">i</code> inserts a new line <b>before</b> the match.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '/foo/c text' file</code></td><td class="desc"><code class="cmd">c</code> <b>changes</b> (replaces) the whole matched line(s) with new text.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 'y/abc/xyz/' file</code></td><td class="desc"><code class="cmd">y</code> transliterates char-by-char (a&rarr;x, b&rarr;y, c&rarr;z), like <code class="cmd">tr</code>. Not a regex; sets must be equal length.</td></tr>
+    </table>
+
+    <h2 class="section-title">Useful s-command flags</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed -n 's/foo/bar/p' file</code></td><td class="desc"><code class="cmd">p</code> flag: print only the lines where the substitution <b>succeeded</b>.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/x/y/3g' file</code></td><td class="desc">Number + <code class="cmd">g</code>: replace from the <b>3rd</b> match to the end of the line.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed -n 's/foo/bar/w out.txt' file</code></td><td class="desc"><code class="cmd">w file</code> flag: write changed lines to a file.</td></tr>
+    </table>
+  </section>
+
+  <!-- ADVANCED -->
+  <section class="panel" id="adv">
+    <h2 class="section-title">The hold space</h2>
+    <p class="section-desc">sed has two buffers: the <b>pattern space</b> (the current line) and the <b>hold space</b> (an extra store that <b>persists across lines</b>). Moving data between them unlocks multi-line transforms.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">h</code></td><td class="desc"><b>Hold</b>: copy pattern space &rarr; hold space (overwrite).</td></tr>
+      <tr><td class="keys"><code class="cmd">H</code></td><td class="desc">Append pattern space to the hold space (with a leading newline).</td></tr>
+      <tr><td class="keys"><code class="cmd">g</code></td><td class="desc"><b>Get</b>: copy hold space &rarr; pattern space (overwrite). Note: this is the <i>command</i> g, not the <code class="cmd">s///g</code> flag.</td></tr>
+      <tr><td class="keys"><code class="cmd">G</code></td><td class="desc">Append hold space to the pattern space (with a leading newline).</td></tr>
+      <tr><td class="keys"><code class="cmd">x</code></td><td class="desc"><b>Exchange</b>: swap the pattern and hold spaces.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Reverse a file (tac):</b> <code class="cmd">sed -n '1!G;h;$p' file</code>. Each line appends the accumulated hold space below itself (<code class="cmd">G</code>), saves it back (<code class="cmd">h</code>), and the last line prints the reversed stack (<code class="cmd">$p</code>).
+    </div>
+
+    <h2 class="section-title">Working across multiple lines</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">N</code></td><td class="desc">Append the <b>next</b> input line to the pattern space, joined by a <code class="cmd">\n</code>. Now a regex can match across the two lines.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 'N;s/\n/ /' file</code></td><td class="desc">Join each pair of lines into one (replace the embedded newline with a space).</td></tr>
+      <tr><td class="keys"><code class="cmd">sed ':a;N;$!ba;s/\n/,/g' file</code></td><td class="desc">Slurp the whole file into the pattern space, then turn every newline into a comma (joins all lines).</td></tr>
+    </table>
+
+    <h2 class="section-title">Branching &amp; loops</h2>
+    <p class="section-desc">Labels and branches give sed real control flow.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">:label</code></td><td class="desc">Define a label (a jump target).</td></tr>
+      <tr><td class="keys"><code class="cmd">b label</code></td><td class="desc"><b>Branch</b> unconditionally to the label. <code class="cmd">b</code> with no label jumps to the end of the script.</td></tr>
+      <tr><td class="keys"><code class="cmd">t label</code></td><td class="desc"><b>Test</b>: branch only if an <code class="cmd">s</code> succeeded since the last line read or last <code class="cmd">t</code>.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Squeeze repeated spaces:</b> <code class="cmd">sed ':a;s/  / /;ta' file</code>. The substitution turns two spaces into one; <code class="cmd">ta</code> loops back to <code class="cmd">:a</code> as long as substitutions keep happening, collapsing any run of spaces down to one.
+    </div>
+
+    <h2 class="section-title">Grouping &amp; quitting</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed '1,5{s/a/b/;s/c/d/}' file</code></td><td class="desc">Braces <code class="cmd">{ }</code> group commands under one address &mdash; both substitutions run only on lines 1&ndash;5.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '5q' file</code></td><td class="desc"><code class="cmd">q</code> prints the current line, then quits. Stops at line 5, so you see lines 1&ndash;5.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '5Q' file</code></td><td class="desc">GNU <code class="cmd">Q</code> quits <b>immediately</b> without printing the current line (lines 1&ndash;4).</td></tr>
+    </table>
+
+    <h2 class="section-title">GNU case-conversion &amp; greediness</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">sed 's/.*/\U&/' file</code></td><td class="desc">GNU: <code class="cmd">\U</code> uppercases the replacement (until <code class="cmd">\E</code>); <code class="cmd">\L</code> lowercases, <code class="cmd">\u</code>/<code class="cmd">\l</code> affect one char.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed 's/.*foo//' file</code></td><td class="desc">Greedy: <code class="cmd">.*</code> matches as much as possible, so this removes everything up to the <b>last</b> "foo". sed has no lazy <code class="cmd">*?</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">sed '/file\.txt/d' file</code></td><td class="desc">Escape <code class="cmd">.</code> as <code class="cmd">\.</code> to match a literal dot &mdash; unescaped it matches any character.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Replace only the first match in the whole file:</b> the <code class="cmd">g</code> flag is per-line, so it cannot do this. Use the GNU range <code class="cmd">0,/re/</code>: <code class="cmd">sed '0,/foo/s//bar/' file</code> ends the range at the very first match (even on line 1), unlike <code class="cmd">1,/re/</code> which only starts testing the end regex from line 2.
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="panel" id="quiz">
+    <div id="quiz-setup">
+      <h2 class="section-title">Test yourself</h2>
+      <p class="section-desc">Pick a difficulty and how many questions you want. Each round draws a fresh random set from the bank, and the answer order is shuffled too.</p>
+
+      <div class="setup-row">
+        <span class="setup-label">Difficulty</span>
+        <div class="seg" id="level-seg">
+          <button class="seg-btn active" data-level="beginner">Beginner</button>
+          <button class="seg-btn" data-level="intermediate">Intermediate</button>
+          <button class="seg-btn" data-level="advanced">Advanced</button>
+          <button class="seg-btn" data-level="mixed">Mixed</button>
+        </div>
+      </div>
+
+      <div class="setup-row">
+        <span class="setup-label">Questions</span>
+        <div class="seg" id="count-seg">
+          <button class="seg-btn active" data-count="5">5</button>
+          <button class="seg-btn" data-count="10">10</button>
+          <button class="seg-btn" data-count="15">15</button>
+          <button class="seg-btn" data-count="0">All</button>
+        </div>
+      </div>
+
+      <p class="bank-info" id="bank-info"></p>
+      <button class="btn" id="start-quiz">Start quiz</button>
+    </div>
+
+    <div id="quiz-play" class="hidden">
+      <div class="quiz-head">
+        <div class="progress-line" id="progress">Question 1</div>
+        <div class="score-pill" id="score">Score: 0</div>
+      </div>
+      <div id="quiz-body"></div>
+    </div>
+  </section>
+
+  <footer>Examples assume GNU sed unless noted. Quiz questions live in <code class="cmd">questions.js</code>.</footer>
+</div>
+
+<!-- Question bank: edit questions.js to add/remove questions -->
+<script src="questions.js"></script>
+<script>
+  // ---- Tabs ----
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.target).classList.add('active');
+  }));
+
+  // ---- Quiz state ----
+  const BANK = window.SED_QUESTIONS || [];
+  let chosenLevel = 'beginner';
+  let chosenCount = 5;
+  let QUESTIONS = [];           // the active drawn set, with options pre-shuffled
+  let idx = 0, score = 0, answered = false;
+
+  const setupEl = document.getElementById('quiz-setup');
+  const playEl = document.getElementById('quiz-play');
+  const bankInfo = document.getElementById('bank-info');
+  const body = document.getElementById('quiz-body');
+  const progressEl = document.getElementById('progress');
+  const scoreEl = document.getElementById('score');
+
+  // Fisher-Yates shuffle (returns a new array)
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function poolFor(level) {
+    return level === 'mixed' ? BANK : BANK.filter(q => q.level === level);
+  }
+
+  function updateBankInfo() {
+    const pool = poolFor(chosenLevel);
+    const want = chosenCount === 0 ? pool.length : Math.min(chosenCount, pool.length);
+    bankInfo.innerHTML = `Bank has <b>${pool.length}</b> ${chosenLevel === 'mixed' ? 'total' : chosenLevel} questions. This round will draw <b>${want}</b>.`;
+  }
+
+  // Segmented control wiring
+  function wireSeg(segId, onPick) {
+    const seg = document.getElementById(segId);
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onPick(btn);
+        updateBankInfo();
+      });
+    });
+  }
+  wireSeg('level-seg', btn => { chosenLevel = btn.dataset.level; });
+  wireSeg('count-seg', btn => { chosenCount = +btn.dataset.count; });
+
+  // Build the active question set: draw random questions, shuffle each one's options
+  function buildSet() {
+    const pool = poolFor(chosenLevel);
+    const drawn = shuffle(pool).slice(0, chosenCount === 0 ? pool.length : chosenCount);
+    QUESTIONS = drawn.map(item => {
+      const correctText = item.opts[item.correct];
+      const shuffledOpts = shuffle(item.opts);
+      return {
+        q: item.q,
+        opts: shuffledOpts,
+        correct: shuffledOpts.indexOf(correctText),
+        why: item.why,
+        level: item.level
+      };
+    });
+  }
+
+  document.getElementById('start-quiz').addEventListener('click', () => {
+    buildSet();
+    if (!QUESTIONS.length) { bankInfo.textContent = 'No questions available for that selection.'; return; }
+    idx = 0; score = 0;
+    setupEl.classList.add('hidden');
+    playEl.classList.remove('hidden');
+    render();
+  });
+
+  // ---- Quiz engine ----
+  function render() {
+    answered = false;
+    const item = QUESTIONS[idx];
+    progressEl.textContent = `Question ${idx + 1} of ${QUESTIONS.length}`;
+    scoreEl.textContent = `Score: ${score}`;
+    const badge = item.level ? `<span style="color:var(--muted);font-weight:400;text-transform:capitalize"> &middot; ${item.level}</span>` : '';
+    body.innerHTML = `
+      <div class="q-card">
+        <div class="q-num">Question ${idx + 1}${badge}</div>
+        <div class="q-text">${item.q}</div>
+        <div class="opts">
+          ${item.opts.map((o, i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}
+        </div>
+        <div class="explain" id="explain"><b>Why:</b> ${item.why}</div>
+        <div class="q-actions">
+          <button class="btn" id="next" disabled>${idx === QUESTIONS.length - 1 ? 'See results' : 'Next question'}</button>
+          <button class="btn ghost" id="quit">Quit</button>
+        </div>
+      </div>`;
+
+    body.querySelectorAll('.opt').forEach(btn => btn.addEventListener('click', () => choose(btn)));
+    document.getElementById('next').addEventListener('click', next);
+    document.getElementById('quit').addEventListener('click', backToSetup);
+  }
+
+  function choose(btn) {
+    if (answered) return;
+    answered = true;
+    const item = QUESTIONS[idx];
+    const chosen = +btn.dataset.i;
+    const opts = body.querySelectorAll('.opt');
+    opts.forEach((o, i) => {
+      o.disabled = true;
+      if (i === item.correct) o.classList.add('correct');
+      if (i === chosen && i !== item.correct) o.classList.add('wrong');
+    });
+    if (chosen === item.correct) score++;
+    scoreEl.textContent = `Score: ${score}`;
+    document.getElementById('explain').classList.add('show');
+    document.getElementById('next').disabled = false;
+  }
+
+  function next() {
+    if (idx < QUESTIONS.length - 1) { idx++; render(); }
+    else results();
+  }
+
+  function results() {
+    const total = QUESTIONS.length;
+    const pct = Math.round((score / total) * 100);
+    let msg;
+    if (pct === 100) msg = "Flawless. The stream bends to your will.";
+    else if (pct >= 75) msg = "Strong. A couple of flags to nail down.";
+    else if (pct >= 50) msg = "Decent start. Revisit the guide tabs and retry.";
+    else msg = "Worth another pass through the guide. Then try again.";
+    progressEl.textContent = "Complete";
+    body.innerHTML = `
+      <div class="q-card result-card">
+        <div class="big">${score} / ${total}</div>
+        <div class="msg">${msg} (${pct}%)</div>
+        <div class="q-actions" style="justify-content:center">
+          <button class="btn" id="again">New round</button>
+          <button class="btn ghost" id="change">Change settings</button>
+        </div>
+      </div>`;
+    document.getElementById('again').addEventListener('click', () => {
+      buildSet(); idx = 0; score = 0; render();
+    });
+    document.getElementById('change').addEventListener('click', backToSetup);
+  }
+
+  function backToSetup() {
+    playEl.classList.add('hidden');
+    setupEl.classList.remove('hidden');
+  }
+
+  // Init
+  if (!BANK.length) {
+    bankInfo.innerHTML = '&#9888; Question bank failed to load. Make sure <code class="cmd">questions.js</code> sits next to this HTML file.';
+    document.getElementById('start-quiz').disabled = true;
+  } else {
+    updateBankInfo();
+  }
+</script>
+</body>
+</html>

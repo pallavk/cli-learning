@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding git rebase</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Understanding <span class="dot">git rebase</span></h1>
+  <p class="sub">Rebase does one thing: it <b>replays</b> your commits on top of a different base, creating brand-new commits.</p>
+
+  <p class="lead">The confusion around rebase melts away once you hold one idea: a commit is a <i>snapshot plus a pointer to its parent</i>. Rebase cannot "move" a commit, because a commit's identity (its hash) is built from its parent and contents. So rebase <b>copies</b> each of your commits onto a new parent, giving each a new hash, then slides your branch pointer to the last copy. The originals are left behind, unreferenced.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> base history (e.g. <code class="c">main</code>)</span>
+    <span><span class="dot-l feat"></span> your commits (about to be replayed)</span>
+    <span><span class="dot-l new"></span> replayed copies (new hashes)</span>
+    <span><span class="dot-l ghost"></span> orphaned originals (reflog only)</span>
+  </div>
+
+  <h2>1 · Rebasing a branch onto another</h2>
+  <p>You branched <code class="c">feature</code> off <code class="c">main</code> at commit <b>B</b>. Since then, a teammate added <b>C</b> to <code class="c">main</code>. You want your work to sit <i>on top of</i> the latest <code class="c">main</code>, as if you had started today. Step through <code class="c">git rebase main</code> while on <code class="c">feature</code>:</p>
+
+  <div class="scene" id="scene-rebase"></div>
+
+  <div class="callout warn">
+    <b>The Golden Rule of Rebasing.</b> Never rebase commits that you have already pushed and others may have based work on. Rebase rewrites history (new hashes); if the old commits are public, everyone else still has them and your histories diverge. Rebase freely on your <i>local, unshared</i> branches; use <code class="c">merge</code> for shared ones.
+  </div>
+
+  <h2>2 · Interactive rebase: cleaning up your own history</h2>
+  <p><code class="c">git rebase -i</code> opens a <b>todo list</b> of the commits about to be replayed and lets you edit the plan: reorder lines, <code class="c">reword</code> a message, <code class="c">squash</code> several commits into one, <code class="c">edit</code> to stop and amend, or <code class="c">drop</code> to delete. Here you squash three messy "wip" commits into a single clean one with <code class="c">git rebase -i HEAD~3</code>:</p>
+
+  <div class="scene" id="scene-interactive"></div>
+
+  <div class="callout">
+    <b>fixup vs squash.</b> <code class="c">squash</code> keeps both commit messages (you edit the combined one); <code class="c">fixup</code> discards the squashed commit's message entirely. The workflow <code class="c">git commit --fixup=&lt;sha&gt;</code> then <code class="c">git rebase -i --autosquash</code> automates the todo-list ordering for you.
+  </div>
+
+  <h2>3 · Merge vs rebase — same goal, different history</h2>
+  <p>Both integrate <code class="c">main</code>'s new work into <code class="c">feature</code>. The difference is the <i>shape</i> of the history they leave behind.</p>
+  <div class="compare">
+    <div class="scene" id="scene-merge"><div class="cap"></div></div>
+    <div class="scene" id="scene-rebase2"></div>
+  </div>
+  <p class="muted" style="font-size:13.5px">Merge preserves exactly what happened (a fork and a join) and adds a <b>merge commit</b> with two parents. Rebase fabricates a tidy straight line, at the cost of rewriting your commits. Neither is "correct" — teams pick a convention. A common one: rebase your local feature to stay current, then <code class="c">merge --no-ff</code> it into <code class="c">main</code> so the feature stays visible as a unit.</p>
+
+  <h2>4 · <code class="c">--onto</code>: transplanting a range</h2>
+  <p>The full form is <code class="c">git rebase --onto &lt;newbase&gt; &lt;upstream&gt; &lt;branch&gt;</code>. It takes the commits that are on <code class="c">&lt;branch&gt;</code> but not on <code class="c">&lt;upstream&gt;</code>, and replays them onto <code class="c">&lt;newbase&gt;</code>. It is the tool for "I branched off the wrong place" — e.g. you built <code class="c">topic</code> on top of <code class="c">feature</code>, but it should sit on <code class="c">main</code>:</p>
+  <div class="todo"><span class="cmt"># move only topic's own commits onto main, dropping feature from underneath</span>
+git rebase --onto main feature topic</div>
+
+  <h2>5 · When a replay hits a conflict</h2>
+  <p>Rebase applies your commits one at a time. If commit <b>D</b> doesn't apply cleanly onto the new base, rebase <b>pauses</b> and hands you the conflict. You are now mid-replay, not on a normal branch tip.</p>
+  <div class="todo"><span class="cmt"># 1. fix the conflicted files, then stage them</span>
+git add &lt;files&gt;
+<span class="cmt"># 2. resume — do NOT run `git commit`, rebase owns the commit</span>
+git rebase --continue
+<span class="cmt"># skip this commit entirely (rare)</span>
+git rebase --skip
+<span class="cmt"># bail out completely, restoring the branch to its pre-rebase state</span>
+git rebase --abort</div>
+  <div class="callout">
+    <b>You can always undo a rebase.</b> Before it starts, git records where your branch was. <code class="c">git rebase --abort</code> restores it mid-flight, and even after a "finished" rebase, <code class="c">git reflog</code> shows the old tip so you can <code class="c">git reset --hard HEAD@{1}</code> back. A rebase is never truly destructive until git's garbage collector runs (weeks later). See the <a href="reflog.html">reflog explainer</a>.
+  </div>
+
+  <h2>Check your understanding</h2>
+  <details class="reveal"><summary>After <code class="c">git rebase main</code>, do commits D and E still exist with the same hashes?</summary>
+    <div class="body">No. Their <i>contents</i> are replayed as <b>new</b> commits D′ and E′ with new hashes (because their parent changed, and a hash is computed from parent + tree + metadata). The original D and E still exist on disk but are now unreferenced — reachable only through the reflog until garbage-collected.</div></details>
+  <details class="reveal"><summary>Why is rebasing a pushed/shared branch dangerous, but rebasing a local one fine?</summary>
+    <div class="body">Rebase replaces commits with new-hash copies. If teammates already pulled the originals, their branch still points at the old commits while yours points at the new ones — the histories diverge and a later push/pull creates duplicate commits and messy merges. On a branch only you have, nobody else holds the old commits, so replacing them is harmless.</div></details>
+  <details class="reveal"><summary>You're mid-rebase resolving a conflict. Should you run <code class="c">git commit</code> after <code class="c">git add</code>?</summary>
+    <div class="body">No. During a rebase, git is the one creating each replayed commit. You stage the fix and run <code class="c">git rebase --continue</code>; git then commits it (reusing the original message) and moves on to the next commit. Running <code class="c">git commit</code> yourself would create an extra, unintended commit.</div></details>
+
+  <footer>Part of the Git concepts set · step through each diagram, then read the callouts.</footer>
+</div>
+
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git rebase main"   // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block (interactive rebase)
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+/* ---------------- Scene 1: rebase feature onto main ---------------- */
+makeScene(document.getElementById('scene-rebase'), [
+  {
+    narration:'Starting point. <b>main</b> has A→B→C. You branched <b>feature</b> at B and added D→E. The branches have <i>diverged</i>.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'feat'},{id:'E',col:3,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'E',kind:'head'}]
+  },
+  {
+    command:'git rebase main',
+    narration:'Git finds the common ancestor <b>B</b>, then sets <b>main</b> (commit C) as the new base. Your commits to replay are <b>D</b> and <b>E</b>. It detaches them from B.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'feat'},{id:'E',col:3,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D']],
+    refs:[{name:'main',at:'C',kind:'branch'}]
+  },
+  {
+    command:'git rebase main',
+    narration:'Replaying commit 1 of 2: the <i>changes</i> in D are applied on top of C, producing a new commit <b>D′</b> with a <b>new hash</b>. The original D is now orphaned.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'ghost'},{id:'E',col:3,row:1,kind:'ghost'},
+      {id:'D2',col:3,row:0,kind:'new',label:"D′"}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D'],['D2','C']],
+    refs:[{name:'main',at:'C',kind:'branch'}]
+  },
+  {
+    command:'git rebase main',
+    narration:'Replaying commit 2 of 2: E\'s changes apply onto D′, producing <b>E′</b>. Both replayed commits now form a straight line after C.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'ghost'},{id:'E',col:3,row:1,kind:'ghost'},
+      {id:'D2',col:3,row:0,kind:'new',label:"D′"},{id:'E2',col:4,row:0,kind:'new',label:"E′"}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D'],['D2','C'],['E2','D2']],
+    refs:[{name:'main',at:'C',kind:'branch'}]
+  },
+  {
+    command:'git rebase main',
+    narration:'Finally git moves the <b>feature</b> branch pointer to the last replayed commit E′, and reattaches HEAD. The orphaned D and E will be cleaned up by git\'s garbage collector eventually (until then, the reflog can recover them).',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'ghost'},{id:'E',col:3,row:1,kind:'ghost'},
+      {id:'D2',col:3,row:0,kind:'new',label:"D′"},{id:'E2',col:4,row:0,kind:'new',label:"E′"}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D'],['D2','C'],['E2','D2']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'E2',kind:'head'}]
+  },
+  {
+    narration:'<b>Done.</b> The result reads as a clean, linear history: A→B→C→D′→E′. Compare this to a merge, which would instead keep the fork and add a join commit (see section 3).',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D2',col:3,row:0,kind:'new',label:"D′"},{id:'E2',col:4,row:0,kind:'new',label:"E′"}
+    ],
+    edges:[['B','A'],['C','B'],['D2','C'],['E2','D2']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'E2',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene 2: interactive rebase / squash ---------------- */
+makeScene(document.getElementById('scene-interactive'), [
+  {
+    narration:'Your <b>feature</b> branch has three quick commits — <b>X</b>, <b>Y</b>, <b>Z</b> — with messy messages ("wip", "fix", "typo"). You want them to become one clean commit.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'X',col:2,row:0,kind:'feat'},{id:'Y',col:3,row:0,kind:'feat'},{id:'Z',col:4,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['X','B'],['Y','X'],['Z','Y']],
+    refs:[{name:'feature',at:'Z',kind:'head'}]
+  },
+  {
+    command:'git rebase -i HEAD~3',
+    narration:'Git opens an editor with a <b>todo list</b> — the last 3 commits, oldest first. You change <code class="c">pick</code> to <code class="c">squash</code> (or <code class="c">s</code>) on Y and Z to fold them into X:',
+    todo:'<span class="pick">pick</span>   X  wip\n<span class="squash">squash</span> Y  fix\n<span class="squash">squash</span> Z  typo\n<span class="cmt"># squash = use this commit, but meld into the previous one</span>',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'X',col:2,row:0,kind:'feat'},{id:'Y',col:3,row:0,kind:'feat'},{id:'Z',col:4,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['X','B'],['Y','X'],['Z','Y']],
+    refs:[{name:'feature',at:'Z',kind:'head'}]
+  },
+  {
+    command:'git rebase -i HEAD~3',
+    narration:'Git replays X normally, then melds Y and Z into it, prompting you once for the <b>combined commit message</b>. The three originals become orphaned.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'X',col:2,row:1,kind:'ghost'},{id:'Y',col:3,row:1,kind:'ghost'},{id:'Z',col:4,row:1,kind:'ghost'},
+      {id:'W',col:2,row:0,kind:'new',label:'W'}
+    ],
+    edges:[['B','A'],['X','B'],['Y','X'],['Z','Y'],['W','B']],
+    refs:[{name:'feature',at:'W',kind:'head'}]
+  },
+  {
+    narration:'<b>Result:</b> a single tidy commit <b>W</b> containing all the work of X+Y+Z, with one clear message. History is now A→B→W. This is the everyday use of rebase: curating your own commits before sharing them.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'W',col:2,row:0,kind:'new',label:'W'}
+    ],
+    edges:[['B','A'],['W','B']],
+    refs:[{name:'feature',at:'W',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene 3a: merge result (static) ---------------- */
+makeScene(document.getElementById('scene-merge'), [
+  {
+    narration:'<b>git merge main</b> (run on feature): a <b>merge commit M</b> joins the two lines. M has <i>two parents</i> (E and C). Nothing is rewritten — D and E keep their hashes.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:2,row:0,kind:'feat'},{id:'E',col:3,row:0,kind:'feat'},
+      {id:'M',col:4,row:0,kind:'new',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D'],['M','E'],['M','C']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'M',kind:'head'}]
+  }
+],{static:true});
+
+/* ---------------- Scene 3b: rebase result (static) ---------------- */
+makeScene(document.getElementById('scene-rebase2'), [
+  {
+    narration:'<b>git rebase main</b>: a straight line, no merge commit. D and E are replaced by new-hash copies D′ and E′. The fork is erased from history.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D2',col:3,row:0,kind:'new',label:"D′"},{id:'E2',col:4,row:0,kind:'new',label:"E′"}
+    ],
+    edges:[['B','A'],['C','B'],['D2','C'],['E2','D2']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'E2',kind:'head'}]
+  }
+],{static:true});
+</script>
+</body>
+</html>

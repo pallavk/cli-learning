@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding git worktree</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- worktree topology diagram (custom, reuses the design tokens) ---- */
+  .topo{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;margin:20px 0}
+  .topo .row{display:flex;gap:26px;align-items:stretch;flex-wrap:wrap;justify-content:center}
+  .store{flex:0 0 220px;background:var(--panel-2);border:1.5px solid var(--accent);border-radius:12px;padding:14px 16px;align-self:center}
+  .store .ttl{font-weight:650;font-size:14px;color:var(--accent)}
+  .store .path{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:2px}
+  .store .meta{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+  .chip{font-family:var(--mono);font-size:11px;background:var(--key);border:1px solid var(--border);border-radius:5px;padding:3px 7px;color:var(--purple);display:inline-block}
+  .wts{flex:1 1 360px;display:flex;flex-direction:column;gap:12px;min-width:300px}
+  .wt{background:var(--panel-2);border:1.5px solid var(--border);border-radius:12px;padding:12px 15px;position:relative;transition:opacity .4s ease,border-color .3s,transform .4s ease;opacity:1}
+  .wt.main-wt{border-color:var(--base)}
+  .wt.linked{border-color:var(--feat)}
+  .wt.fresh{border-color:var(--new);box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .wt.hidden{opacity:0;transform:translateY(8px);pointer-events:none}
+  .wt.rejected{border-color:#c8585b;border-style:dashed}
+  .wt .hd{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .wt .folder{font-family:var(--mono);font-size:12.5px;color:var(--text);font-weight:600}
+  .wt .br{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:6px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .wt .br.feat{background:rgba(224,168,107,.14);border-color:var(--feat);color:var(--feat)}
+  .wt .br.new{background:rgba(111,224,171,.14);border-color:var(--new);color:var(--new)}
+  .wt .br.bad{background:rgba(200,88,91,.14);border-color:#c8585b;color:#e88}
+  .wt .gitline{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:7px}
+  .wt .role{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .topo .link{font-family:var(--mono);font-size:11px;color:var(--accent);text-align:center;margin:2px 0 0}
+  .topo .ctrl{justify-content:flex-start}
+  .topo .narr{margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Understanding <span class="dot">git worktree</span></h1>
+  <p class="sub">One repository, <b>many</b> working directories — each on a different branch, all sharing a single history.</p>
+
+  <p class="lead">A normal clone is a one-to-one deal: <i>one</i> folder of files, tied to <i>one</i> checked-out branch. To work on a second branch you switch in place — which means stashing or committing whatever you were doing first. <code class="c">git worktree</code> breaks that one-to-one rule. It lets a single repository project <b>several</b> working directories at once, each parked on its own branch, in its own folder — without a second clone and <b>without duplicating any history</b>.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> the main working directory &amp; its branch</span>
+    <span><span class="dot-l feat"></span> a linked worktree (another branch)</span>
+    <span><span class="dot-l new"></span> the worktree being added</span>
+    <span><span class="dot-l ghost"></span> a branch that can't be claimed twice</span>
+  </div>
+
+  <h2>1 · The core mental model</h2>
+  <p>Every git repository has two halves that we usually see as one folder:</p>
+  <p>• The <b>object store &amp; refs</b> — the <code class="c">.git</code> directory: all commits, trees, blobs, branch pointers, tags, the stash, config and remotes. This is the repository's <i>brain</i>, and there is exactly one of it.<br>
+  • A <b>working directory</b> — the actual files on disk for <i>one</i> branch, plus an index (staging area). This is just a <i>view</i> the brain projects.</p>
+  <p>A clone glues exactly one working directory to that brain. <code class="c">git worktree</code> lets the same brain drive <b>multiple</b> working directories simultaneously. They all read and write the <i>same</i> commits, branches and stash — they just each show a different branch's files. Step through adding one:</p>
+
+  <div class="topo" id="topo-add">
+    <div class="row">
+      <div class="store">
+        <div class="ttl">.git object store</div>
+        <div class="path">~/proj/.git</div>
+        <div class="meta">
+          <span class="chip">all commits</span>
+          <span class="chip">branches + tags</span>
+          <span class="chip">stash · config · remotes</span>
+        </div>
+      </div>
+      <div class="wts">
+        <div class="wt main-wt" data-wt="main">
+          <div class="hd"><span class="folder">~/proj</span><span class="br feat">feature</span></div>
+          <div class="role">main working directory · half-done feature work</div>
+          <div class="gitline">.git/ &nbsp;<span style="color:var(--muted)">(real directory — the brain lives here)</span></div>
+        </div>
+        <p class="link" data-link="hotfix">▲ linked via .git file</p>
+        <div class="wt linked hidden" data-wt="hotfix">
+          <div class="hd"><span class="folder">~/proj-hotfix</span><span class="br">main</span></div>
+          <div class="role">linked worktree · urgent bug fix on a clean tree</div>
+          <div class="gitline">.git &nbsp;→ <span style="color:var(--purple)">gitdir: ~/proj/.git/worktrees/proj-hotfix</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <button class="btn" id="topo-prev" disabled>◀ Prev</button>
+      <button class="btn" id="topo-next">Next ▶</button>
+      <button class="btn ghost" id="topo-restart">↻ Restart</button>
+      <span class="counter" id="topo-counter"></span>
+    </div>
+    <div class="cmdbar empty" id="topo-cmd">(no command yet)</div>
+    <div class="narr" id="topo-narr"></div>
+  </div>
+
+  <div class="callout">
+    <b>The one sentence to remember.</b> A worktree is a second (or third) checkout of <i>the same repository</i>, in a different folder, on a different branch — sharing one object store and one set of refs. No second clone. No duplicated objects. No stashing to switch.
+  </div>
+
+  <h2>2 · Why this matters</h2>
+  <p>The everyday problem worktrees solve: you're deep in <code class="c">feature</code>, the tree is dirty and half-broken, and something urgent lands on <code class="c">main</code>. Below, the same A→B→C history is shared by every worktree — each branch pointer just selects a different commit to materialise on disk. The worktrees don't copy history; they <i>point into</i> it.</p>
+
+  <div class="scene" id="scene-shared"></div>
+
+  <p class="muted" style="font-size:13.5px">Concrete wins: <b>fix an urgent bug on <code class="c">main</code></b> in <code class="c">../hotfix</code> while your feature stays exactly as you left it · <b>run a long build or test suite</b> on one branch while you keep coding in another · <b>review a PR branch</b> in a separate folder your editor can open side-by-side · <b>diff two branches in two editor windows</b> instead of flipping one window back and forth.</p>
+
+  <h2>3 · The commands</h2>
+  <p><code class="c">git worktree add &lt;path&gt; &lt;branch&gt;</code> is the workhorse. It creates a new directory at <code class="c">&lt;path&gt;</code>, checks <code class="c">&lt;branch&gt;</code> out there, and writes a lightweight link back to the main repo — no copying of <code class="c">.git</code>.</p>
+  <div class="todo"><span class="cmt"># check out an EXISTING branch into a sibling folder</span>
+git worktree add ../hotfix main
+
+<span class="cmt"># create a NEW branch and check it out in one step</span>
+git worktree add -b reviewpr ../reviewpr origin/pr-42
+
+<span class="cmt"># see every worktree, its path, HEAD commit and branch</span>
+git worktree list
+
+<span class="cmt"># detach a worktree cleanly (removes the folder + admin link)</span>
+git worktree remove ../hotfix
+
+<span class="cmt"># clean up admin entries for folders that were deleted by hand</span>
+git worktree prune</div>
+  <p><code class="c">git worktree list</code> prints one line per worktree — the main one first, then each linked one with its absolute path, short HEAD hash, and <code class="c">[branch]</code>. <code class="c">remove</code> is the polite way to delete: it refuses if the worktree has uncommitted changes (use <code class="c">--force</code> to override), then deletes both the folder and the internal bookkeeping.</p>
+
+  <div class="callout">
+    <b>The link is a file, not a folder.</b> In a linked worktree, <code class="c">.git</code> is a tiny text <i>file</i> containing one line — <code class="c">gitdir: /path/to/main/.git/worktrees/&lt;name&gt;</code> — pointing back at the real object store. That per-worktree admin folder holds only what is genuinely <i>per-checkout</i>: that worktree's own <code class="c">HEAD</code>, index, and logs. Commits, branches, stash and config still live once, in the main <code class="c">.git</code>.
+  </div>
+
+  <h2>4 · The key constraint: a branch can't be checked out twice</h2>
+  <p>This is the rule that surprises everyone. Because every worktree shares the <i>same</i> branch pointers, git refuses to check out a branch that is <b>already checked out in another worktree</b>. If it allowed two folders to sit on <code class="c">main</code>, a commit in one would silently yank the other's <code class="c">HEAD</code> out from under it. So git stops you up front:</p>
+
+  <div class="topo" id="topo-reject">
+    <div class="row">
+      <div class="store">
+        <div class="ttl">.git object store</div>
+        <div class="path">~/proj/.git</div>
+        <div class="meta">
+          <span class="chip">main → C</span>
+          <span class="chip">one pointer, shared</span>
+        </div>
+      </div>
+      <div class="wts">
+        <div class="wt main-wt" data-wt="m1">
+          <div class="hd"><span class="folder">~/proj</span><span class="br">main</span></div>
+          <div class="role">already has <b>main</b> checked out</div>
+        </div>
+        <p class="link" data-link="m2">▼ tries to claim the same branch</p>
+        <div class="wt rejected hidden" data-wt="m2">
+          <div class="hd"><span class="folder">~/proj-2</span><span class="br bad">main ✗</span></div>
+          <div class="role" id="reject-role">git worktree add ../proj-2 main</div>
+        </div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <button class="btn" id="rej-prev" disabled>◀ Prev</button>
+      <button class="btn" id="rej-next">Next ▶</button>
+      <button class="btn ghost" id="rej-restart">↻ Restart</button>
+      <span class="counter" id="rej-counter"></span>
+    </div>
+    <div class="cmdbar empty" id="rej-cmd">(no command yet)</div>
+    <div class="narr" id="rej-narr"></div>
+  </div>
+
+  <div class="callout warn">
+    <b>The fix is almost always a different branch.</b> You rarely <i>want</i> the same branch twice. Use <code class="c">git worktree add -b hotfix ../hotfix main</code> to branch a fresh <code class="c">hotfix</code> off <code class="c">main</code> and check <i>that</i> out instead. If you genuinely must (e.g. a build that won't touch HEAD), <code class="c">--force</code> overrides the guard — but then you own the risk of two trees fighting over one ref.
+  </div>
+
+  <h3>What worktrees share — and what's per-tree</h3>
+  <p>Everything in the object store is shared, so changes are instantly visible everywhere: commit in one worktree and the new commit, and any branch you moved, is immediately seen by the others. The <b>stash</b>, <b>config</b>, <b>remotes</b> and <b>tags</b> are all single, shared copies. What's private to each worktree is only its <b>working tree files</b>, its <b>index/staging area</b>, and its own <b>HEAD</b> (which branch it's on).</p>
+
+  <h2>5 · Worktree vs. the alternatives</h2>
+  <p>Worktrees sit in the gap between two things you already know. Here is the same "I need to touch another branch" situation solved three ways:</p>
+  <div class="compare">
+    <div class="scene" id="scene-stash"></div>
+    <div class="scene" id="scene-worktree-line"></div>
+  </div>
+  <p class="muted" style="font-size:13.5px"><b>git stash</b> (left) keeps you in <i>one</i> folder: you shelve your dirty changes, switch branch in place, deal with the urgent thing, switch back, and <code class="c">stash pop</code>. It works, but it's context-switch friction — your editor reloads, your build cache churns, and a forgotten stash bites later. A <b>second <code class="c">git clone</code></b> gives you a separate folder but duplicates the entire object store on disk and gives you <i>separate</i> branches, stash, config and remotes that drift apart. <b>Worktrees</b> (right) are the middle ground: a separate folder like a clone, but one shared brain like a stash-free switch — no shelving, no disk bloat, no drift.</p>
+
+  <div class="callout">
+    <b>Deleting a worktree by hand leaves a stale entry.</b> If you <code class="c">rm -rf ../hotfix</code> instead of <code class="c">git worktree remove</code>, the main repo still lists a worktree that no longer exists. That's harmless but noisy — and it keeps the branch "claimed", so you can't check it out elsewhere. <code class="c">git worktree prune</code> sweeps away those orphaned admin entries and frees the branch again.
+  </div>
+
+  <h2>Check your understanding</h2>
+  <details class="reveal"><summary>Does <code class="c">git worktree add ../x feature</code> copy the repository's history into <code class="c">../x</code>?</summary>
+    <div class="body">No. It copies <i>no</i> history at all. The new folder gets the working files for <code class="c">feature</code> plus a one-line <code class="c">.git</code> <b>file</b> pointing back to the original <code class="c">.git</code> object store. All commits, branches, tags, the stash and config stay in the single main <code class="c">.git</code> and are shared. That's the whole point — unlike a second <code class="c">clone</code>, nothing on disk is duplicated.</div></details>
+  <details class="reveal"><summary>Why does git refuse <code class="c">git worktree add ../two main</code> when <code class="c">main</code> is already checked out?</summary>
+    <div class="body">Because all worktrees share one set of branch pointers. If two folders both sat on <code class="c">main</code>, committing in one would advance <code class="c">main</code> and silently move the <i>other</i> folder's <code class="c">HEAD</code>, leaving its files out of sync with the ref it thinks it's on. Git blocks the second checkout to prevent that conflict. Check out a <i>different</i> branch, or create a new one with <code class="c">-b</code>.</div></details>
+  <details class="reveal"><summary>You commit on a branch in worktree A. Is it visible in worktree B?</summary>
+    <div class="body">Yes, immediately — if B is on a branch that includes it. There is one object store and one set of refs, so a new commit, a moved branch pointer, a new tag, or a stash entry created anywhere is instantly part of <i>every</i> worktree's shared brain. Only the working files, the index, and which branch each worktree has checked out (its <code class="c">HEAD</code>) are per-worktree.</div></details>
+  <details class="reveal"><summary>You ran <code class="c">rm -rf ../hotfix</code> to delete a worktree. What's left, and how do you clean it?</summary>
+    <div class="body">The folder is gone, but the main repo still keeps an admin entry under <code class="c">.git/worktrees/</code> that lists the now-missing worktree (you'll still see it in <code class="c">git worktree list</code>), and it keeps that branch marked as checked-out so you can't claim it elsewhere. Run <code class="c">git worktree prune</code> to drop the stale entry and free the branch. Next time, prefer <code class="c">git worktree remove ../hotfix</code>, which does both cleanly.</div></details>
+
+  <footer>Part of the Git concepts set · step through each diagram, then read the callouts.</footer>
+</div>
+
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git worktree add ../hotfix main"   // optional, command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+/* ---------------- Scene: shared history, two worktrees ---------------- */
+makeScene(document.getElementById('scene-shared'), [
+  {
+    narration:'One repository, one history: <b>main</b> is A→B→C, and you branched <b>feature</b> at B, adding D. There is exactly <i>one</i> object store holding all of this.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'D',kind:'head'}]
+  },
+  {
+    narration:'Your <b>main</b> working directory is parked on <b>feature</b> (HEAD → feature, commit D) — that\'s the dirty, half-done work you don\'t want to disturb.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'D',kind:'head'}]
+  },
+  {
+    command:'git worktree add ../hotfix main',
+    narration:'You add a <b>second</b> working directory in <code class="c">../hotfix</code>, checked out on <b>main</b>. No history is copied — it just points at the same commit C. Now <i>two</i> worktrees view the one shared graph at once: feature@D and main@C.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'new'},
+      {id:'D',col:2,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  },
+  {
+    command:'git commit  # in ../hotfix, on main',
+    narration:'You fix the bug in <code class="c">../hotfix</code> and commit <b>E</b> on <b>main</b>. Because the object store is shared, E lands in the <i>same</i> history your feature worktree can see — your feature files on disk never moved.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'E',col:3,row:0,kind:'new'},
+      {id:'D',col:2,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['E','C'],['D','B']],
+    refs:[{name:'main',at:'E',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  },
+  {
+    command:'git worktree remove ../hotfix',
+    narration:'Hotfix shipped. You remove the linked worktree — the folder and its admin link vanish, but commit <b>E</b> stays in the shared store on <b>main</b>. Back in your main folder, <b>feature</b>@D is exactly as you left it. No stash, no churn.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'E',col:3,row:0,kind:'base'},
+      {id:'D',col:2,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['E','C'],['D','B']],
+    refs:[{name:'main',at:'E',kind:'branch'},{name:'feature',at:'D',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene 5a: stash path (in one folder) ---------------- */
+makeScene(document.getElementById('scene-stash'), [
+  {
+    narration:'<b>git stash</b> route — one folder only. To touch <b>main</b> you stash your dirty <b>feature</b> work, <code class="c">switch main</code>, fix &amp; commit <b>E</b>, then <code class="c">switch feature</code> and <code class="c">stash pop</code> to restore D. Same single working directory the whole time — your editor and build churn on every switch.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'E',col:3,row:0,kind:'feat'},
+      {id:'D',col:2,row:1,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B'],['E','C'],['D','B']],
+    refs:[{name:'main',at:'E',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  }
+],{static:true});
+
+/* ---------------- Scene 5b: worktree path (two folders) ---------------- */
+makeScene(document.getElementById('scene-worktree-line'), [
+  {
+    narration:'<b>git worktree</b> route — two folders, one brain. <b>feature</b>@D stays live in your main folder while <b>main</b> advances to <b>E</b> in <code class="c">../hotfix</code>. Nothing is stashed; both checkouts coexist on the same shared history.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'E',col:3,row:0,kind:'new'},
+      {id:'D',col:2,row:1,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['E','C'],['D','B']],
+    refs:[{name:'main',at:'E',kind:'branch'},{name:'feature',at:'D',kind:'head'}]
+  }
+],{static:true});
+
+/* ===================================================================
+   Custom topology steppers (plain divs, reuse the design tokens).
+   =================================================================== */
+function makeTopo(cfg){
+  let i = 0;
+  const cmd = document.getElementById(cfg.cmd);
+  const narr = document.getElementById(cfg.narr);
+  const counter = document.getElementById(cfg.counter);
+  const prev = document.getElementById(cfg.prev);
+  const next = document.getElementById(cfg.next);
+  const restart = document.getElementById(cfg.restart);
+  function render(){
+    const f = cfg.frames[i];
+    // apply per-element class state
+    Object.keys(f.state||{}).forEach(sel=>{
+      const els = document.querySelectorAll(cfg.scope+' [data-wt="'+sel+'"], '+cfg.scope+' [data-link="'+sel+'"]');
+      els.forEach(e=>{ e.className = f.state[sel]; });
+    });
+    if(f.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+f.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = f.narration||'';
+    if(f.rejectRole && cfg.rejectRole){ document.getElementById(cfg.rejectRole).innerHTML = f.rejectRole; }
+    counter.textContent = 'Step '+(i+1)+' / '+cfg.frames.length;
+    prev.disabled = i===0; next.disabled = i===cfg.frames.length-1;
+  }
+  prev.onclick=()=>{ i=Math.max(0,i-1); render(); };
+  next.onclick=()=>{ i=Math.min(cfg.frames.length-1,i+1); render(); };
+  restart.onclick=()=>{ i=0; render(); };
+  render();
+}
+
+/* ----- Topology 1: worktree add ----- */
+makeTopo({
+  scope:'#topo-add', cmd:'topo-cmd', narr:'topo-narr', counter:'topo-counter',
+  prev:'topo-prev', next:'topo-next', restart:'topo-restart',
+  frames:[
+    {
+      state:{ main:'wt main-wt', hotfix:'wt linked hidden' },
+      narration:'You start with one clone: a single <b>main working directory</b> at <code class="c">~/proj</code>, currently on <b>feature</b>. Its <code class="c">.git</code> is a real directory — the object store (the brain) physically lives here.'
+    },
+    {
+      command:'git worktree add ../proj-hotfix main',
+      state:{ main:'wt main-wt', hotfix:'wt fresh', hotfix_link:'link' },
+      narration:'Git creates a <b>new folder</b> <code class="c">~/proj-hotfix</code> and checks out <b>main</b> there. It writes <i>no</i> object data — instead it drops a one-line <code class="c">.git</code> <b>file</b> pointing back to the original store. The branch <b>main</b> is now claimed by this worktree.'
+    },
+    {
+      state:{ main:'wt main-wt', hotfix:'wt linked', hotfix_link:'link' },
+      narration:'Settled. Two working directories, <i>one</i> shared object store. <code class="c">~/proj</code> shows <b>feature</b>; <code class="c">~/proj-hotfix</code> shows <b>main</b>. They share every commit, branch, tag, the stash, config and remotes — only the files on disk, the index, and each folder\'s HEAD differ. Run <code class="c">git worktree list</code> and you\'ll see both.'
+    }
+  ]
+});
+
+/* ----- Topology 2: same branch twice → rejected ----- */
+makeTopo({
+  scope:'#topo-reject', cmd:'rej-cmd', narr:'rej-narr', counter:'rej-counter',
+  prev:'rej-prev', next:'rej-next', restart:'rej-restart', rejectRole:'reject-role',
+  frames:[
+    {
+      state:{ m1:'wt main-wt', m2:'wt rejected hidden', m2_link:'link' },
+      rejectRole:'git worktree add ../proj-2 main',
+      narration:'Your main worktree <code class="c">~/proj</code> already has <b>main</b> checked out. The branch pointer <code class="c">main → C</code> lives once in the shared store.'
+    },
+    {
+      command:'git worktree add ../proj-2 main',
+      state:{ m1:'wt main-wt', m2:'wt rejected', m2_link:'link' },
+      rejectRole:'<span style="color:#e88">fatal: \'main\' is already checked out at \'~/proj\'</span>',
+      narration:'You try to check out <b>main</b> again in <code class="c">~/proj-2</code>. Git <b>refuses</b>. Because both folders would share the one <code class="c">main</code> pointer, a commit in either would silently drag the other\'s HEAD along — so git blocks the second checkout before it can happen.'
+    },
+    {
+      command:'git worktree add -b hotfix ../proj-2 main',
+      state:{ m1:'wt main-wt', m2:'wt fresh', m2_link:'link' },
+      rejectRole:'<span style="color:var(--new)">new branch hotfix → C · checked out cleanly</span>',
+      narration:'The fix: give the new worktree its <i>own</i> branch. <code class="c">-b hotfix</code> forks a fresh <b>hotfix</b> off <b>main</b> and checks <i>that</i> out instead. Two distinct branches, no shared-pointer conflict — git is happy.'
+    }
+  ]
+});
+</script>
+</body>
+</html>

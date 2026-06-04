@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>git Field Guide</title>
+<style>
+  :root {
+    --bg: #1a1b1e;
+    --panel: #232428;
+    --panel-2: #2b2d31;
+    --border: #3a3c42;
+    --text: #e4e4e7;
+    --muted: #9a9ba1;
+    --accent: #5bc8af;
+    --accent-dim: rgba(91, 200, 175, 0.14);
+    --key-bg: #15161a;
+    --good: #5bc8af;
+    --bad: #e07a6b;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 28px; }
+  h1 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    letter-spacing: -0.5px;
+    font-weight: 650;
+  }
+  h1 .dot { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0; font-size: 15px; }
+  .prefix-note {
+    margin-top: 18px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .prefix-note strong { color: var(--accent); }
+
+  .deepdive {
+    display: block; margin-top: 12px; text-decoration: none;
+    background: var(--panel); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 10px;
+    padding: 12px 16px; font-size: 14px; color: var(--text);
+    transition: border-color .2s, transform .12s;
+  }
+  .deepdive:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .deepdive .dd-label { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .deepdive strong { color: var(--accent); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin: 28px 0 0; flex-wrap: wrap; }
+  .tab {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 550;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: color .15s, background .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); background: var(--panel); }
+  .panel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 8px 22px 22px;
+  }
+  .panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2.section-title { font-size: 17px; margin: 22px 0 4px; font-weight: 600; }
+  h2.section-title:first-child { margin-top: 16px; }
+  .section-desc { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.keys { white-space: nowrap; width: 1%; }
+  td.desc { color: var(--text); }
+
+  kbd {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    color: var(--accent);
+    display: inline-block;
+    line-height: 1.5;
+  }
+  .seq { color: var(--muted); margin: 0 3px; font-size: 12px; }
+  code.cmd {
+    font-family: var(--mono);
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+    color: #d8b4fe;
+  }
+  .callout {
+    background: var(--panel-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .callout b { color: var(--text); }
+
+  /* Quiz */
+  .quiz-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .progress-line { color: var(--muted); font-size: 14px; }
+  .score-pill {
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .q-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    margin-top: 18px;
+  }
+  .q-num { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+  .q-text { font-size: 17px; margin: 8px 0 18px; }
+  .opts { display: grid; gap: 10px; }
+  .opt {
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .opt kbd { pointer-events: none; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+  .opt:disabled { cursor: default; }
+  .opt.correct { border-color: var(--good); background: rgba(91,200,175,.15); }
+  .opt.wrong { border-color: var(--bad); background: rgba(224,122,107,.13); }
+  .explain {
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: none;
+  }
+  .explain.show { display: block; }
+  .explain b { color: var(--text); }
+  .q-actions { margin-top: 18px; display: flex; gap: 10px; }
+  .btn {
+    background: var(--accent);
+    color: #11201c;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .result-card { text-align: center; padding: 40px 22px; }
+  .result-card .big { font-size: 44px; font-weight: 700; color: var(--accent); }
+  .result-card .msg { color: var(--muted); margin: 8px 0 20px; }
+  .hidden { display: none; }
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 30px; }
+
+  /* Quiz setup */
+  .setup-row { display: flex; align-items: center; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+  .setup-label { color: var(--muted); font-size: 13px; width: 80px; flex-shrink: 0; }
+  .seg { display: inline-flex; background: var(--key-bg); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg-btn {
+    border: none; background: transparent; color: var(--muted);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 550;
+    padding: 7px 14px; border-radius: 7px; cursor: pointer; transition: all .15s;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent); color: #11201c; }
+  .bank-info { color: var(--muted); font-size: 13px; margin: 18px 0 14px; }
+  .bank-info b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>git Field Guide<span class="dot">.</span></h1>
+    <p class="sub">A practical reference for commits, branches, and remotes &mdash; with a quiz to test yourself.</p>
+    <div class="prefix-note">
+      Everything in git flows through <strong>three areas</strong>: the <strong>working tree</strong> (the files you edit),
+      the <strong>staging area</strong> or <em>index</em> (the snapshot you are about to commit), and the
+      <strong>repository</strong> (the committed history, with <kbd>HEAD</kbd> pointing at where you are).
+      You move files forward with <code class="cmd">git add</code> (working tree &rarr; index) and
+      <code class="cmd">git commit</code> (index &rarr; history). Most confusion in git melts away once this model clicks.
+    </div>
+    <a class="deepdive" href="concepts/index.html">
+      <span class="dd-label">Go deeper &rarr;</span>
+      Interactive explainers for the concepts a cheatsheet can't teach &mdash;
+      <strong>rebase, merge, reset, HEAD &amp; refs, worktree, reflog</strong> &mdash; each animates what actually happens to your commits, step by step.
+    </a>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-target="intro">Introductory</button>
+    <button class="tab" data-target="inter">Intermediate</button>
+    <button class="tab" data-target="adv">Advanced</button>
+    <button class="tab" data-target="quiz">Test Me</button>
+  </nav>
+
+  <!-- INTRODUCTORY -->
+  <section class="panel active" id="intro">
+    <h2 class="section-title">The mental model</h2>
+    <p class="section-desc">A change travels through three places: the <b>working tree</b> (your files), the <b>staging area / index</b> (what <code class="cmd">git add</code> has captured), and the <b>repository</b> of commits (what <code class="cmd">git commit</code> records). <b>HEAD</b> points at the commit/branch you are currently on.</p>
+
+    <h2 class="section-title">Starting a repository</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git init</code></td><td class="desc">Create a new, empty repository in the current folder (makes a <code class="cmd">.git</code> directory).</td></tr>
+      <tr><td class="keys"><code class="cmd">git clone &lt;url&gt;</code></td><td class="desc">Copy an existing remote repo, including its full history. Sets up <code class="cmd">origin</code> automatically.</td></tr>
+      <tr><td class="keys"><code class="cmd">git config --global user.name "You"</code></td><td class="desc">Set the name stamped on your commits (do the same for <code class="cmd">user.email</code>).</td></tr>
+    </table>
+
+    <h2 class="section-title">The everyday cycle</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git status</code></td><td class="desc">See what is staged, modified, or untracked. Your most-used command.</td></tr>
+      <tr><td class="keys"><code class="cmd">git add &lt;file&gt;</code></td><td class="desc">Stage a file's current contents into the index. <code class="cmd">git add .</code> stages everything below the current dir.</td></tr>
+      <tr><td class="keys"><code class="cmd">git commit -m "msg"</code></td><td class="desc">Record whatever is staged as a new commit. <code class="cmd">git commit -am "msg"</code> auto-stages tracked files.</td></tr>
+      <tr><td class="keys"><code class="cmd">git log --oneline</code></td><td class="desc">Browse history, one compact line per commit. Add <code class="cmd">--graph --all</code> to see branches.</td></tr>
+      <tr><td class="keys"><code class="cmd">git diff</code></td><td class="desc">Show <b>unstaged</b> changes (working tree vs index). <code class="cmd">git diff --staged</code> shows what is staged.</td></tr>
+      <tr><td class="keys"><code class="cmd">git show &lt;hash&gt;</code></td><td class="desc">Show a single commit's message and the patch it introduced.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Memory hook:</b> <code class="cmd">git diff</code> alone = "what have I changed but not staged?" &mdash; <code class="cmd">git diff --staged</code> = "what am I about to commit?"
+    </div>
+
+    <h2 class="section-title">Branching basics</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git branch</code></td><td class="desc">List local branches; the current one is marked with <code class="cmd">*</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">git switch &lt;name&gt;</code></td><td class="desc">Move onto an existing branch (the modern replacement for <code class="cmd">git checkout &lt;name&gt;</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">git switch -c &lt;name&gt;</code></td><td class="desc">Create a new branch and switch to it (old form: <code class="cmd">git checkout -b &lt;name&gt;</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">git merge &lt;name&gt;</code></td><td class="desc">Bring another branch's commits into the current one.</td></tr>
+    </table>
+
+    <h2 class="section-title">Working with a remote</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git remote -v</code></td><td class="desc">List remotes and their URLs (<code class="cmd">origin</code> is the default after a clone).</td></tr>
+      <tr><td class="keys"><code class="cmd">git fetch</code></td><td class="desc">Download remote changes <b>without</b> touching your working branch.</td></tr>
+      <tr><td class="keys"><code class="cmd">git pull</code></td><td class="desc"><code class="cmd">fetch</code> + merge in one step &mdash; updates your current branch.</td></tr>
+      <tr><td class="keys"><code class="cmd">git push -u origin main</code></td><td class="desc">Upload commits and set the upstream so later <code class="cmd">push</code>/<code class="cmd">pull</code> need no arguments.</td></tr>
+    </table>
+
+    <h2 class="section-title">.gitignore</h2>
+    <p class="section-desc">A <code class="cmd">.gitignore</code> file lists patterns of files git should not track &mdash; build output, secrets, <code class="cmd">node_modules</code>, etc.</p>
+    <div class="callout">
+      <b>Gotcha:</b> ignore rules only affect <b>untracked</b> files. If a file is already tracked, adding it to <code class="cmd">.gitignore</code> does nothing until you stop tracking it with <code class="cmd">git rm --cached &lt;file&gt;</code>.
+    </div>
+  </section>
+
+  <!-- INTERMEDIATE -->
+  <section class="panel" id="inter">
+    <h2 class="section-title">Undoing things (the four tools)</h2>
+    <p class="section-desc">The classic source of confusion. Match the tool to the area you want to change.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">git restore &lt;file&gt;</code></td><td class="desc">Discard <b>unstaged</b> changes &mdash; restore the working file from the index/HEAD.</td></tr>
+      <tr><td class="keys"><code class="cmd">git restore --staged &lt;file&gt;</code></td><td class="desc"><b>Unstage</b> a file (pull it out of the index) but keep your edits. Same as the old <code class="cmd">git reset &lt;file&gt;</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">git commit --amend</code></td><td class="desc">Replace the most recent commit (fix the message or add forgotten changes). Creates a new hash.</td></tr>
+      <tr><td class="keys"><code class="cmd">git revert &lt;hash&gt;</code></td><td class="desc">Create a <b>new</b> commit that undoes an earlier one. Safe on shared branches &mdash; nothing is rewritten.</td></tr>
+    </table>
+
+    <h2 class="section-title">git reset &mdash; the three modes</h2>
+    <p class="section-desc">All three move the branch pointer (HEAD). They differ in what they do to the index and working tree.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">git reset --soft HEAD~1</code></td><td class="desc">Move HEAD back; keep changes <b>staged</b>. Great for re-committing or squashing.</td></tr>
+      <tr><td class="keys"><code class="cmd">git reset --mixed HEAD~1</code></td><td class="desc"><b>Default.</b> Move HEAD and reset the index; changes stay in the working tree but become <b>unstaged</b>.</td></tr>
+      <tr><td class="keys"><code class="cmd">git reset --hard HEAD~1</code></td><td class="desc">Move HEAD and discard <b>everything</b> &mdash; index and working tree. Destroys uncommitted work.</td></tr>
+    </table>
+    <div class="callout">
+      <b>reset vs revert vs restore:</b> <code class="cmd">reset</code> moves HEAD (rewrites local history) &middot; <code class="cmd">revert</code> adds an inverse commit (safe for shared history) &middot; <code class="cmd">restore</code> only touches files, never HEAD.
+    </div>
+
+    <h2 class="section-title">Stashing</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git stash</code></td><td class="desc">Shelve uncommitted changes and return to a clean tree.</td></tr>
+      <tr><td class="keys"><code class="cmd">git stash list</code></td><td class="desc">See the stash stack.</td></tr>
+      <tr><td class="keys"><code class="cmd">git stash pop</code></td><td class="desc">Re-apply the latest stash and <b>remove</b> it from the stack.</td></tr>
+      <tr><td class="keys"><code class="cmd">git stash apply</code></td><td class="desc">Re-apply but <b>keep</b> the stash entry.</td></tr>
+    </table>
+
+    <h2 class="section-title">Merging &amp; conflicts</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git merge feature</code></td><td class="desc">Fast-forwards if possible; otherwise creates a merge commit with two parents.</td></tr>
+      <tr><td class="keys"><code class="cmd">git merge --no-ff feature</code></td><td class="desc">Always create a merge commit, even when a fast-forward was possible &mdash; preserves the branch's shape.</td></tr>
+      <tr><td class="keys"><code class="cmd">git merge --abort</code></td><td class="desc">Bail out of an in-progress merge and restore the pre-merge state.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Fast-forward:</b> if your branch is a direct ancestor, git just slides the pointer forward &mdash; no merge commit. Resolve a conflict by editing the file, then <code class="cmd">git add</code> it and <code class="cmd">git commit</code>.
+    </div>
+
+    <h2 class="section-title">Branch & remote upkeep</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git branch -d feature</code></td><td class="desc">Delete a merged branch (<code class="cmd">-D</code> to force-delete an unmerged one).</td></tr>
+      <tr><td class="keys"><code class="cmd">git remote add upstream &lt;url&gt;</code></td><td class="desc">Add a second remote (common for forks tracking the original repo).</td></tr>
+      <tr><td class="keys"><code class="cmd">git pull --rebase</code></td><td class="desc">Fetch, then replay your local commits on top &mdash; avoids an extra merge commit.</td></tr>
+      <tr><td class="keys"><code class="cmd">git clean -fd</code></td><td class="desc">Delete untracked files (<code class="cmd">-f</code>) and dirs (<code class="cmd">-d</code>). Preview first with <code class="cmd">-n</code>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Tags</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git tag v1.0</code></td><td class="desc">Lightweight tag &mdash; just a name on a commit.</td></tr>
+      <tr><td class="keys"><code class="cmd">git tag -a v1.0 -m "release"</code></td><td class="desc">Annotated tag &mdash; a full object with tagger, date, message (preferred for releases).</td></tr>
+      <tr><td class="keys"><code class="cmd">git push origin v1.0</code></td><td class="desc">Push one tag (tags are not sent by a plain <code class="cmd">git push</code>). <code class="cmd">--tags</code> pushes all.</td></tr>
+    </table>
+  </section>
+
+  <!-- ADVANCED -->
+  <section class="panel" id="adv">
+    <h2 class="section-title">Rebasing</h2>
+    <p class="section-desc">Rebase replays your commits onto a new base, giving a clean linear history &mdash; at the cost of rewriting commit hashes.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">git rebase main</code></td><td class="desc">Move your branch's commits on top of <code class="cmd">main</code>'s tip.</td></tr>
+      <tr><td class="keys"><code class="cmd">git rebase -i HEAD~3</code></td><td class="desc"><b>Interactive</b> rebase: <code class="cmd">pick</code>, <code class="cmd">squash</code>, <code class="cmd">reword</code>, <code class="cmd">edit</code>, <code class="cmd">drop</code>, or reorder the last 3 commits.</td></tr>
+      <tr><td class="keys"><code class="cmd">git rebase --continue</code></td><td class="desc">After resolving a conflict (and <code class="cmd">git add</code>), proceed. <code class="cmd">--skip</code> drops a commit; <code class="cmd">--abort</code> bails.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Golden rule:</b> never rebase commits you have already pushed to a shared branch. Rewriting public history forces painful reconciliation on everyone else. <b>Merge</b> preserves true topology; <b>rebase</b> rewrites for a linear story.
+    </div>
+
+    <h2 class="section-title">Cherry-pick, bisect, blame</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git cherry-pick &lt;hash&gt;</code></td><td class="desc">Replay one specific commit onto the current branch (<code class="cmd">-n</code> to stage without committing).</td></tr>
+      <tr><td class="keys"><code class="cmd">git bisect start</code></td><td class="desc">Binary-search history for the commit that introduced a bug: mark <code class="cmd">good</code>/<code class="cmd">bad</code> until git isolates it.</td></tr>
+      <tr><td class="keys"><code class="cmd">git blame &lt;file&gt;</code></td><td class="desc">Show the commit, author, and date that last touched each line.</td></tr>
+    </table>
+
+    <h2 class="section-title">reflog &mdash; the safety net</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git reflog</code></td><td class="desc">A local log of every move of HEAD. Lets you recover commits "lost" by a bad reset, rebase, or amend.</td></tr>
+      <tr><td class="keys"><code class="cmd">git reset --hard &lt;hash&gt;</code></td><td class="desc">Recover by resetting back to a hash you found in the reflog.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Detached HEAD:</b> checking out a commit or tag points HEAD directly at a commit, not a branch. Commits made there belong to no branch and can be lost &mdash; create a branch (<code class="cmd">git switch -c &lt;name&gt;</code>) to keep them.
+    </div>
+
+    <h2 class="section-title">Pushing power-tools</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git push --force-with-lease</code></td><td class="desc">Safer force-push: refuses if the remote branch moved since your last fetch (won't clobber a teammate's work).</td></tr>
+      <tr><td class="keys"><code class="cmd">git push origin --delete feature</code></td><td class="desc">Delete a remote branch (older form: <code class="cmd">git push origin :feature</code>).</td></tr>
+    </table>
+    <div class="callout">
+      <b>Refspecs:</b> a refspec is <code class="cmd">&lt;src&gt;:&lt;dst&gt;</code>. The default fetch refspec <code class="cmd">+refs/heads/*:refs/remotes/origin/*</code> maps remote branches into your <code class="cmd">origin/*</code> tracking refs; the leading <code class="cmd">+</code> allows non-fast-forward updates.
+    </div>
+
+    <h2 class="section-title">The .git internals (in brief)</h2>
+    <p class="section-desc">Everything in <code class="cmd">.git</code> is content-addressed by SHA. Four object types:</p>
+    <table>
+      <tr><td class="keys"><b>blob</b></td><td class="desc">Raw file contents &mdash; no name, no metadata. Identical content is stored once (deduplicated).</td></tr>
+      <tr><td class="keys"><b>tree</b></td><td class="desc">A directory: names mapping to blobs and sub-trees. A commit points to one top-level tree.</td></tr>
+      <tr><td class="keys"><b>commit</b></td><td class="desc">A tree snapshot + parent commit(s) + author/committer + message. Diffs are computed, not stored.</td></tr>
+      <tr><td class="keys"><b>ref</b></td><td class="desc">A named pointer to a commit (branches and tags live under <code class="cmd">.git/refs</code>). Moving a branch just rewrites its ref.</td></tr>
+    </table>
+
+    <h2 class="section-title">Submodules &amp; squashing</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">git submodule add &lt;url&gt; libs/foo</code></td><td class="desc">Nest another repo, pinned to a specific commit (a gitlink), recorded in <code class="cmd">.gitmodules</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">git submodule update --init --recursive</code></td><td class="desc">Populate submodules after cloning (or clone with <code class="cmd">--recurse-submodules</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">git reset --soft HEAD~3</code> then <code class="cmd">git commit</code></td><td class="desc">Squash the last 3 commits into one &mdash; their changes stay staged, ready to recombine.</td></tr>
+      <tr><td class="keys"><code class="cmd">git merge --squash feature</code></td><td class="desc">Collapse a branch's work into staged changes (no merge parent recorded); commit it yourself.</td></tr>
+    </table>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="panel" id="quiz">
+    <div id="quiz-setup">
+      <h2 class="section-title">Test yourself</h2>
+      <p class="section-desc">Pick a difficulty and how many questions you want. Each round draws a fresh random set from the bank, and the answer order is shuffled too.</p>
+
+      <div class="setup-row">
+        <span class="setup-label">Difficulty</span>
+        <div class="seg" id="level-seg">
+          <button class="seg-btn active" data-level="beginner">Beginner</button>
+          <button class="seg-btn" data-level="intermediate">Intermediate</button>
+          <button class="seg-btn" data-level="advanced">Advanced</button>
+          <button class="seg-btn" data-level="mixed">Mixed</button>
+        </div>
+      </div>
+
+      <div class="setup-row">
+        <span class="setup-label">Questions</span>
+        <div class="seg" id="count-seg">
+          <button class="seg-btn active" data-count="5">5</button>
+          <button class="seg-btn" data-count="10">10</button>
+          <button class="seg-btn" data-count="15">15</button>
+          <button class="seg-btn" data-count="0">All</button>
+        </div>
+      </div>
+
+      <p class="bank-info" id="bank-info"></p>
+      <button class="btn" id="start-quiz">Start quiz</button>
+    </div>
+
+    <div id="quiz-play" class="hidden">
+      <div class="quiz-head">
+        <div class="progress-line" id="progress">Question 1</div>
+        <div class="score-pill" id="score">Score: 0</div>
+      </div>
+      <div id="quiz-body"></div>
+    </div>
+  </section>
+
+  <footer>A practical git reference. Quiz questions live in <code class="cmd">questions.js</code>.</footer>
+</div>
+
+<!-- Question bank: edit questions.js to add/remove questions -->
+<script src="questions.js"></script>
+<script>
+  // ---- Tabs ----
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.target).classList.add('active');
+  }));
+
+  // ---- Quiz state ----
+  const BANK = window.GIT_QUESTIONS || [];
+  let chosenLevel = 'beginner';
+  let chosenCount = 5;
+  let QUESTIONS = [];           // the active drawn set, with options pre-shuffled
+  let idx = 0, score = 0, answered = false;
+
+  const setupEl = document.getElementById('quiz-setup');
+  const playEl = document.getElementById('quiz-play');
+  const bankInfo = document.getElementById('bank-info');
+  const body = document.getElementById('quiz-body');
+  const progressEl = document.getElementById('progress');
+  const scoreEl = document.getElementById('score');
+
+  // Fisher-Yates shuffle (returns a new array)
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function poolFor(level) {
+    return level === 'mixed' ? BANK : BANK.filter(q => q.level === level);
+  }
+
+  function updateBankInfo() {
+    const pool = poolFor(chosenLevel);
+    const want = chosenCount === 0 ? pool.length : Math.min(chosenCount, pool.length);
+    bankInfo.innerHTML = `Bank has <b>${pool.length}</b> ${chosenLevel === 'mixed' ? 'total' : chosenLevel} questions. This round will draw <b>${want}</b>.`;
+  }
+
+  // Segmented control wiring
+  function wireSeg(segId, onPick) {
+    const seg = document.getElementById(segId);
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onPick(btn);
+        updateBankInfo();
+      });
+    });
+  }
+  wireSeg('level-seg', btn => { chosenLevel = btn.dataset.level; });
+  wireSeg('count-seg', btn => { chosenCount = +btn.dataset.count; });
+
+  // Build the active question set: draw random questions, shuffle each one's options
+  function buildSet() {
+    const pool = poolFor(chosenLevel);
+    const drawn = shuffle(pool).slice(0, chosenCount === 0 ? pool.length : chosenCount);
+    QUESTIONS = drawn.map(item => {
+      const correctText = item.opts[item.correct];
+      const shuffledOpts = shuffle(item.opts);
+      return {
+        q: item.q,
+        opts: shuffledOpts,
+        correct: shuffledOpts.indexOf(correctText),
+        why: item.why,
+        level: item.level
+      };
+    });
+  }
+
+  document.getElementById('start-quiz').addEventListener('click', () => {
+    buildSet();
+    if (!QUESTIONS.length) { bankInfo.textContent = 'No questions available for that selection.'; return; }
+    idx = 0; score = 0;
+    setupEl.classList.add('hidden');
+    playEl.classList.remove('hidden');
+    render();
+  });
+
+  // ---- Quiz engine ----
+  function render() {
+    answered = false;
+    const item = QUESTIONS[idx];
+    progressEl.textContent = `Question ${idx + 1} of ${QUESTIONS.length}`;
+    scoreEl.textContent = `Score: ${score}`;
+    const badge = item.level ? `<span style="color:var(--muted);font-weight:400;text-transform:capitalize"> &middot; ${item.level}</span>` : '';
+    body.innerHTML = `
+      <div class="q-card">
+        <div class="q-num">Question ${idx + 1}${badge}</div>
+        <div class="q-text">${item.q}</div>
+        <div class="opts">
+          ${item.opts.map((o, i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}
+        </div>
+        <div class="explain" id="explain"><b>Why:</b> ${item.why}</div>
+        <div class="q-actions">
+          <button class="btn" id="next" disabled>${idx === QUESTIONS.length - 1 ? 'See results' : 'Next question'}</button>
+          <button class="btn ghost" id="quit">Quit</button>
+        </div>
+      </div>`;
+
+    body.querySelectorAll('.opt').forEach(btn => btn.addEventListener('click', () => choose(btn)));
+    document.getElementById('next').addEventListener('click', next);
+    document.getElementById('quit').addEventListener('click', backToSetup);
+  }
+
+  function choose(btn) {
+    if (answered) return;
+    answered = true;
+    const item = QUESTIONS[idx];
+    const chosen = +btn.dataset.i;
+    const opts = body.querySelectorAll('.opt');
+    opts.forEach((o, i) => {
+      o.disabled = true;
+      if (i === item.correct) o.classList.add('correct');
+      if (i === chosen && i !== item.correct) o.classList.add('wrong');
+    });
+    if (chosen === item.correct) score++;
+    scoreEl.textContent = `Score: ${score}`;
+    document.getElementById('explain').classList.add('show');
+    document.getElementById('next').disabled = false;
+  }
+
+  function next() {
+    if (idx < QUESTIONS.length - 1) { idx++; render(); }
+    else results();
+  }
+
+  function results() {
+    const total = QUESTIONS.length;
+    const pct = Math.round((score / total) * 100);
+    let msg;
+    if (pct === 100) msg = "Flawless. Your history is clean and your reflog is calm.";
+    else if (pct >= 75) msg = "Strong. A couple of commands to nail down.";
+    else if (pct >= 50) msg = "Decent start. Revisit the guide tabs and retry.";
+    else msg = "Worth another pass through the guide. Then try again.";
+    progressEl.textContent = "Complete";
+    body.innerHTML = `
+      <div class="q-card result-card">
+        <div class="big">${score} / ${total}</div>
+        <div class="msg">${msg} (${pct}%)</div>
+        <div class="q-actions" style="justify-content:center">
+          <button class="btn" id="again">New round</button>
+          <button class="btn ghost" id="change">Change settings</button>
+        </div>
+      </div>`;
+    document.getElementById('again').addEventListener('click', () => {
+      buildSet(); idx = 0; score = 0; render();
+    });
+    document.getElementById('change').addEventListener('click', backToSetup);
+  }
+
+  function backToSetup() {
+    playEl.classList.add('hidden');
+    setupEl.classList.remove('hidden');
+  }
+
+  // Init
+  if (!BANK.length) {
+    bankInfo.innerHTML = '&#9888; Question bank failed to load. Make sure <code class="cmd">questions.js</code> sits next to this HTML file.';
+    document.getElementById('start-quiz').disabled = true;
+  } else {
+    updateBankInfo();
+  }
+</script>
+</body>
+</html>

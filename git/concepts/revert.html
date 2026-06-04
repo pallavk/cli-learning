@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revert — undo by moving forward</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- small extras reusing the design language ---- */
+  .filecard{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0;line-height:1.7;overflow-x:auto;white-space:pre}
+  .filecard .path{color:var(--accent)}
+  .filecard .val{color:var(--purple)}
+  .filecard .cmt{color:var(--muted)}
+  table.reftable{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  table.reftable th,table.reftable td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+  table.reftable th{background:var(--panel-2);color:var(--text);font-weight:600}
+  table.reftable td{color:var(--muted)}
+  table.reftable code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Revert: <span class="dot">undo by moving forward</span></h1>
+  <p class="sub">A revert doesn't erase a commit. It writes a <b>new</b> commit whose changes are the exact <i>inverse</i> of an old one — cancelling its effect while leaving history fully intact.</p>
+
+  <p class="lead">There are two ways to "undo" in git, and they're opposites. <code class="c">git reset</code> moves a branch pointer <i>backwards</i>, abandoning commits — it rewrites history and is unsafe on shared branches. <code class="c">git revert</code> moves <i>forwards</i>, adding an anti-commit that subtracts the change — history grows, nothing is rewritten, and it's safe to push. This page is about the forward kind.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> existing commits (kept)</span>
+    <span><span class="dot-l feat"></span> the commit being reverted</span>
+    <span><span class="dot-l new"></span> the revert commit (inverse diff)</span>
+    <span><span class="dot-l ghost"></span> commits a <code class="c">reset</code> would abandon</span>
+  </div>
+
+  <h2>1 · Reverting a commit adds its inverse</h2>
+  <p>History is A → B → C, and <code class="c">main</code> (with HEAD) is at <b>C</b>. Commit <b>B</b> turned out to be wrong. You don't want to pretend B never happened — it's already pushed and others built C on top. Instead you <i>cancel</i> B with a new commit. Step through <code class="c">git revert B</code>:</p>
+
+  <div class="scene" id="scene-revert"></div>
+
+  <div class="callout">
+    <b>"Inverse diff" — literally.</b> If B <i>added</i> three lines and deleted one, the revert commit <code class="c">¬B</code> deletes those three lines and re-adds the one. Applied on top of C, the net effect is "as if B's change is gone" — but B, and every commit after it, is still right there in the log. Git even pre-fills the message: <code class="c">Revert "B's subject"</code>.
+  </div>
+
+  <h2>2 · revert vs reset — the core distinction</h2>
+  <p>This is the confusion worth burning in. Both "undo" B, but they leave the repository in very different shapes. Reset rips the pointer back to A and lets B and C fall off; revert leaves A → B → C standing and appends <code class="c">¬B</code>. Same goal, opposite mechanics:</p>
+
+  <div class="compare">
+    <div class="scene" id="scene-reset-end"></div>
+    <div class="scene" id="scene-revert-end"></div>
+  </div>
+
+  <table class="reftable">
+    <tr><th>&nbsp;</th><th>git reset --hard A</th><th>git revert B</th></tr>
+    <tr><th>Direction</th><td>Pointer moves <b>back</b> to A</td><td>Pointer moves <b>forward</b> to a new commit</td></tr>
+    <tr><th>History</th><td><b>Rewritten</b> — B and C abandoned</td><td><b>Preserved</b> — B and C stay; one is added</td></tr>
+    <tr><th>Also undoes C?</th><td>Yes — everything after A is gone</td><td>No — only B's change; C survives</td></tr>
+    <tr><th>Safe to push?</th><td><b>No</b> — needs force, breaks others' clones</td><td><b>Yes</b> — it's an ordinary new commit</td></tr>
+    <tr><th>Use when</th><td>The commits are <i>local</i> and unwanted</td><td>The commit is <i>shared</i> / already pushed</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <b>The rule of thumb.</b> If the commit you're undoing has left your machine — pushed, shared, or built on by others — use <b>revert</b>. If it's still private to you, <b>reset</b> is fine and tidier. Reverting is the only "undo" that never forces anyone else to rewrite their history.
+  </div>
+
+  <h2>3 · Reverting a merge commit</h2>
+  <p>A merge commit has <i>two</i> parents, so "undo this merge" is ambiguous: inverse <i>relative to which parent's line</i>? You must say with <code class="c">-m</code>:</p>
+
+  <div class="filecard"><span class="cmt"># M is a merge of feature into main; main is parent 1, feature parent 2</span>
+git revert -m 1 M     <span class="cmt"># undo the merge, keeping main's mainline → removes feature's changes</span>
+git revert -m 2 M     <span class="cmt"># the other mainline (rarely what you want)</span></div>
+
+  <p><code class="c">-m 1</code> means "treat the first parent as the mainline, subtract everything the <i>other</i> side brought in". It works, but with a famous gotcha: git now thinks those feature changes are intentionally undone, so simply <b>merging feature again later won't reintroduce them</b> — you'd have to revert-the-revert first. That asymmetry is why many teams prefer to fix-forward rather than revert merges.</p>
+
+  <div class="callout">
+    <b>Undo an undo.</b> Because a revert is just a commit, you can revert <i>it</i>: <code class="c">git revert &lt;the-revert&gt;</code> re-applies the original change. And reverting multiple commits is one command — <code class="c">git revert C B</code> or <code class="c">git revert A..C</code> stacks an inverse commit for each (use <code class="c">--no-commit</code> to fold them into one).
+  </div>
+
+  <div class="callout">
+    <b>See also.</b> The mechanics of pointers-moving-back live in <a href="reset.html">three trees &amp; git reset</a>; the safety net for when you reset something you shouldn't have is <a href="reflog.html">git reflog</a>.
+  </div>
+
+  <footer>
+    Part of the <a href="index.html">git concepts</a> set · <a href="../git-guide.html">cheatsheet &amp; quiz</a> · self-contained, no network required
+  </footer>
+</div>
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git merge feature"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]   // merge commit = TWO parent edges
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+
+/* ---------------- Scene: revert a commit ---------------- */
+makeScene(document.getElementById('scene-revert'), [
+  {
+    narration:'History is A → B → C, and <b>main</b> is at <b>C</b>. Commit <b>B</b> is the bad one — but it’s already shared, and C was built on top of it.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'feat'},{id:'C',col:2,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git revert B',
+    narration:'Git computes the <b>inverse</b> of B’s diff — every line B added gets removed, every line it removed gets restored — and stages it as a change on top of HEAD (C).',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'feat'},{id:'C',col:2,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git revert B',
+    narration:'A new commit <b>¬B</b> is appended. The repo now behaves as if B’s change is gone — yet A, B and C all remain in history. Nothing was rewritten; the branch only moved <b>forward</b>.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'feat'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'R',col:3,row:0,kind:'new',label:'¬B'}
+    ],
+    edges:[['B','A'],['C','B'],['R','C']],
+    refs:[{name:'main',at:'R',kind:'head'}]
+  }
+]);
+
+/* ---------------- Static: reset end-state ---------------- */
+makeScene(document.getElementById('scene-reset-end'), [
+  {
+    command:'git reset --hard A',
+    narration:'<b>reset</b>: <b>main</b> jumps <i>back</i> to A. B and C are now unreachable — abandoned (they linger only in the reflog until garbage-collected). History was rewritten.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'ghost'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'A',kind:'head'}]
+  }
+],{static:true});
+
+/* ---------------- Static: revert end-state ---------------- */
+makeScene(document.getElementById('scene-revert-end'), [
+  {
+    command:'git revert B',
+    narration:'<b>revert</b>: <b>main</b> moves <i>forward</i> to ¬B. A, B and C are all kept; the bad change is cancelled by an added commit. Nothing rewritten — safe to push.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'feat'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'R',col:3,row:0,kind:'new',label:'¬B'}
+    ],
+    edges:[['B','A'],['C','B'],['R','C']],
+    refs:[{name:'main',at:'R',kind:'head'}]
+  }
+],{static:true});
+</script>
+</body>
+</html>

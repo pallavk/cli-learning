@@ -1,0 +1,5 @@
+# Local Claude Code settings — not shared
+.claude/
+
+# Stray tool logs
+*.log

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stash — your work, parked as commits</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- small extras reusing the design language ---- */
+  .filecard{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0;line-height:1.7;overflow-x:auto;white-space:pre}
+  .filecard .path{color:var(--accent)}
+  .filecard .val{color:var(--purple)}
+  .filecard .cmt{color:var(--muted)}
+  table.reftable{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  table.reftable th,table.reftable td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+  table.reftable th{background:var(--panel-2);color:var(--text);font-weight:600}
+  table.reftable td{color:var(--muted)}
+  table.reftable code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Stash: <span class="dot">your work, parked as commits</span></h1>
+  <p class="sub">A stash isn't a magic clipboard or a temp file. It's a tiny set of <b>real commits</b> stored on a hidden ref — so "stash" is just git committing your mess somewhere out of the way, then cleaning your tree.</p>
+
+  <p class="lead">You're mid-change and need a clean working tree — to switch branches, pull, or test something. <code class="c">git stash</code> snapshots your uncommitted work as commit objects under a special ref called <code class="c">refs/stash</code>, then resets your tree back to the last commit. Later you pop it and the changes flow back. Once you see that a stash entry <i>is a commit</i>, everything about it makes sense.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> your real history / HEAD</span>
+    <span><span class="dot-l feat"></span> the index snapshot (staged state)</span>
+    <span><span class="dot-l new"></span> the stash commit (your working tree)</span>
+    <span><span class="dot-l ghost"></span> a dropped stash, now unreachable</span>
+  </div>
+
+  <h2>1 · What <code class="c">git stash</code> actually creates</h2>
+  <p>Your history is A → B → C and <code class="c">main</code> is at <b>C</b>. Your working tree has edits — some staged, some not. Watch what <code class="c">git stash push</code> builds. The surprise: it makes <i>two</i> commits, and the working-tree one has <b>two parents</b>.</p>
+
+  <div class="scene" id="scene-stash"></div>
+
+  <div class="callout">
+    <b>A stash is a commit with two parents.</b> The stash entry <code class="c">W</code> points at: <b>parent 1</b> = the commit you were on (C), and <b>parent 2</b> = a throwaway commit <code class="c">I</code> capturing your <i>index</i> (staged) state. <code class="c">W</code>'s own tree is your <i>full</i> working directory. That's how one stash can faithfully restore both what you'd staged and what you hadn't. (Add <code class="c">-u</code> and there's a third parent for untracked files.) The ref <code class="c">refs/stash</code> points at W — that's the entire "stash".
+  </div>
+
+  <h2>2 · The stash is a stack</h2>
+  <p>You can stash repeatedly. <code class="c">refs/stash</code> keeps a <b>reflog</b>, so each entry is addressable by position — newest on top:</p>
+
+  <div class="filecard"><span class="cmt"># git stash list</span>
+<span class="path">stash@{0}</span>  <span class="cmt"># WIP on main: 4399030 fix login   ← most recent</span>
+<span class="path">stash@{1}</span>  <span class="cmt"># WIP on feature: a1b2c3d add chart</span>
+<span class="path">stash@{2}</span>  <span class="cmt"># On main: experiment with cache</span>
+<span class="cmt"># apply a specific one:  git stash pop stash@{1}</span></div>
+
+  <p>Two things people trip on here. First, <b>the stash is global to the repo, not per-branch</b> — <code class="c">stash@{0}</code> is the same entry no matter which branch you're on. The "WIP on main" text is just a label recording where it was made; you can pop it onto a different branch entirely. Second, <code class="c">stash@{1}</code> is a <i>stack position</i>, not a time-travel ref like <code class="c">HEAD@{1}</code> — popping <code class="c">stash@{0}</code> renumbers the rest.</p>
+
+  <h2>3 · pop vs apply vs drop</h2>
+  <p>Restoring runs the stash backwards: git replays W's changes onto your working tree. Then the question is whether the entry stays in the stack.</p>
+
+  <div class="scene" id="scene-pop"></div>
+
+  <table class="reftable">
+    <tr><th>Command</th><th>Re-applies changes?</th><th>Keeps the entry?</th></tr>
+    <tr><td><code class="c">git stash pop</code></td><td>Yes</td><td><b>No</b> — drops it on success (the usual choice)</td></tr>
+    <tr><td><code class="c">git stash apply</code></td><td>Yes</td><td><b>Yes</b> — leave it, e.g. to apply to several branches</td></tr>
+    <tr><td><code class="c">git stash drop</code></td><td>No</td><td>No — discard an entry you don't need</td></tr>
+    <tr><td><code class="c">git stash branch &lt;name&gt;</code></td><td>Yes, onto a new branch</td><td>No — best fix when a pop would conflict</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <b>pop can conflict — and then it doesn't drop.</b> If your tree moved on since stashing, replaying W may collide. Git leaves the conflict markers <i>and keeps the stash entry</i> (so you don't lose it), which surprises people who assume pop always cleans up. Resolve the conflict, then <code class="c">git stash drop</code> by hand. When you expect trouble, <code class="c">git stash branch newbranch</code> checks out the stash's original base and applies it there cleanly — no conflict at all.
+  </div>
+
+  <div class="callout">
+    <b>Useful variants.</b> <code class="c">git stash -u</code> includes <b>untracked</b> files (the third parent); <code class="c">-a</code> includes ignored files too · <code class="c">git stash -p</code> stashes only hunks you pick · <code class="c">git stash -k</code> (<code class="c">--keep-index</code>) stashes everything but leaves your staged changes in place — handy to test exactly what you're about to commit · <code class="c">git stash show -p stash@{0}</code> shows the diff a stash holds.
+  </div>
+
+  <div class="callout">
+    <b>"I lost a stash."</b> Because entries are commits, a dropped stash usually still exists until garbage collection. <code class="c">git fsck --no-reflogs | grep commit</code> can surface dangling stash commits, and the <a href="reflog.html">reflog</a> for <code class="c">stash</code> remembers recent drops. Stashes are far more recoverable than their throwaway feel suggests.
+  </div>
+
+  <footer>
+    Part of the <a href="index.html">git concepts</a> set · <a href="../git-guide.html">cheatsheet &amp; quiz</a> · self-contained, no network required
+  </footer>
+</div>
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git merge feature"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]   // merge commit = TWO parent edges
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+
+/* ---------------- Scene: stash push ---------------- */
+makeScene(document.getElementById('scene-stash'), [
+  {
+    narration:'History A → B → C, <b>main</b> at <b>C</b>. Your working tree is <i>dirty</i> — staged and unstaged edits sitting on top of C. You need it clean to switch branches.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git stash push',
+    narration:'Git first snapshots your <b>index</b> (the staged part) as a commit <b>I</b>, parented on C. Think of it as “what a commit right now would have staged”.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'I',col:2,row:0,kind:'feat',label:'I'}
+    ],
+    edges:[['B','A'],['C','B'],['I','C']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git stash push',
+    narration:'Then it snapshots your <b>whole working tree</b> as commit <b>W</b> — with <i>two parents</i>: C (where you were) and I (the staged state). The ref <code class="c">refs/stash</code> is set to W.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'I',col:2,row:0,kind:'feat',label:'I'},{id:'W',col:3,row:0,kind:'new',label:'W'}
+    ],
+    edges:[['B','A'],['C','B'],['I','C'],['W','C'],['W','I']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'stash',at:'W',kind:'tag'}]
+  },
+  {
+    command:'git stash push',
+    narration:'Finally git <b>resets your working tree and index back to C</b> — clean. Your work is fully parked in W (reachable via <code class="c">stash@{0}</code>) and you can switch branches freely.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'I',col:2,row:0,kind:'feat',label:'I'},{id:'W',col:3,row:0,kind:'new',label:'W'}
+    ],
+    edges:[['B','A'],['C','B'],['I','C'],['W','C'],['W','I']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'stash',at:'W',kind:'tag'}]
+  }
+]);
+
+/* ---------------- Scene: stash pop ---------------- */
+makeScene(document.getElementById('scene-pop'), [
+  {
+    narration:'Parked state: <b>main</b> clean at C, the stash entry <b>W</b> (with its index commit I) waiting on <code class="c">refs/stash</code>.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'I',col:2,row:0,kind:'feat',label:'I'},{id:'W',col:3,row:0,kind:'new',label:'W'}
+    ],
+    edges:[['B','A'],['C','B'],['I','C'],['W','C'],['W','I']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'stash',at:'W',kind:'tag'}]
+  },
+  {
+    command:'git stash pop',
+    narration:'Git replays the difference W introduced back onto your working tree — your edits reappear exactly as they were, staged parts still staged.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'I',col:2,row:0,kind:'feat',label:'I'},{id:'W',col:3,row:0,kind:'new',label:'W'}
+    ],
+    edges:[['B','A'],['C','B'],['I','C'],['W','C'],['W','I']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'stash',at:'W',kind:'tag'}]
+  },
+  {
+    command:'git stash pop',
+    narration:'On success, <b>pop drops the entry</b>: <code class="c">refs/stash</code> is removed, so W and I become <b>unreachable</b> — they survive only in the stash reflog until garbage collection. Your tree is dirty again, right where you left off.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'I',col:2,row:0,kind:'ghost',label:'I'},{id:'W',col:3,row:0,kind:'ghost',label:'W'}
+    ],
+    edges:[['B','A'],['C','B'],['I','C'],['W','C'],['W','I']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  }
+]);
+</script>
+</body>
+</html>

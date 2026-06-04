@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>bash Field Guide</title>
+<style>
+  :root {
+    --bg: #1a1b1e;
+    --panel: #232428;
+    --panel-2: #2b2d31;
+    --border: #3a3c42;
+    --text: #e4e4e7;
+    --muted: #9a9ba1;
+    --accent: #5bc8af;
+    --accent-dim: rgba(91, 200, 175, 0.14);
+    --key-bg: #15161a;
+    --good: #5bc8af;
+    --bad: #e07a6b;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 28px; }
+  h1 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    letter-spacing: -0.5px;
+    font-weight: 650;
+  }
+  h1 .dot { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0; font-size: 15px; }
+  .prefix-note {
+    margin-top: 18px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .prefix-note strong { color: var(--accent); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin: 28px 0 0; flex-wrap: wrap; }
+  .tab {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 550;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: color .15s, background .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); background: var(--panel); }
+  .panel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 8px 22px 22px;
+  }
+  .panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2.section-title { font-size: 17px; margin: 22px 0 4px; font-weight: 600; }
+  h2.section-title:first-child { margin-top: 16px; }
+  .section-desc { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.keys { white-space: nowrap; width: 1%; }
+  td.desc { color: var(--text); }
+
+  kbd {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    color: var(--accent);
+    display: inline-block;
+    line-height: 1.5;
+  }
+  .seq { color: var(--muted); margin: 0 3px; font-size: 12px; }
+  code.cmd {
+    font-family: var(--mono);
+    background: var(--key-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+    color: #d8b4fe;
+  }
+  .callout {
+    background: var(--panel-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .callout b { color: var(--text); }
+
+  /* Quiz */
+  .quiz-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .progress-line { color: var(--muted); font-size: 14px; }
+  .score-pill {
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .q-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    margin-top: 18px;
+  }
+  .q-num { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+  .q-text { font-size: 17px; margin: 8px 0 18px; }
+  .opts { display: grid; gap: 10px; }
+  .opt {
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .opt kbd { pointer-events: none; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+  .opt:disabled { cursor: default; }
+  .opt.correct { border-color: var(--good); background: rgba(91,200,175,.15); }
+  .opt.wrong { border-color: var(--bad); background: rgba(224,122,107,.13); }
+  .explain {
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: none;
+  }
+  .explain.show { display: block; }
+  .explain b { color: var(--text); }
+  .q-actions { margin-top: 18px; display: flex; gap: 10px; }
+  .btn {
+    background: var(--accent);
+    color: #11201c;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .result-card { text-align: center; padding: 40px 22px; }
+  .result-card .big { font-size: 44px; font-weight: 700; color: var(--accent); }
+  .result-card .msg { color: var(--muted); margin: 8px 0 20px; }
+  .hidden { display: none; }
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 30px; }
+
+  /* Quiz setup */
+  .setup-row { display: flex; align-items: center; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+  .setup-label { color: var(--muted); font-size: 13px; width: 80px; flex-shrink: 0; }
+  .seg { display: inline-flex; background: var(--key-bg); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg-btn {
+    border: none; background: transparent; color: var(--muted);
+    font-family: var(--sans); font-size: 13.5px; font-weight: 550;
+    padding: 7px 14px; border-radius: 7px; cursor: pointer; transition: all .15s;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent); color: #11201c; }
+  .bank-info { color: var(--muted); font-size: 13px; margin: 18px 0 14px; }
+  .bank-info b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>bash Field Guide<span class="dot">.</span></h1>
+    <p class="sub">A practical reference for the Bourne Again Shell &mdash; variables, expansion, scripting, and more &mdash; with a quiz to test yourself.</p>
+    <div class="prefix-note">
+      Throughout this guide, a leading <strong>$</strong> in examples just marks the <strong>shell prompt</strong> &mdash; you type the command after it, not the dollar sign itself. Examples assume <strong>bash 4+</strong>; a few features (associative arrays, <code class="cmd">${var^^}</code>, <code class="cmd">mapfile</code>, <code class="cmd">globstar</code>) require it.
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-target="intro">Introductory</button>
+    <button class="tab" data-target="inter">Intermediate</button>
+    <button class="tab" data-target="adv">Advanced</button>
+    <button class="tab" data-target="quiz">Test Me</button>
+  </nav>
+
+  <!-- INTRODUCTORY -->
+  <section class="panel active" id="intro">
+    <h2 class="section-title">Navigating &amp; inspecting</h2>
+    <p class="section-desc">The first muscle memory: where am I, what's here, and how do I move around.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">pwd</code></td><td class="desc">Print the current working directory (absolute path).</td></tr>
+      <tr><td class="keys"><code class="cmd">ls -la</code></td><td class="desc">Long listing including hidden dotfiles (<code class="cmd">-a</code>) with details (<code class="cmd">-l</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">cd dir</code></td><td class="desc">Change directory. Bare <code class="cmd">cd</code> goes home; <code class="cmd">cd -</code> returns to the previous directory; <code class="cmd">cd ..</code> goes up one level.</td></tr>
+      <tr><td class="keys"><code class="cmd">cat file</code></td><td class="desc">Dump a file to the screen. Use <code class="cmd">less file</code> to page long files, <code class="cmd">head</code>/<code class="cmd">tail</code> for the start/end.</td></tr>
+    </table>
+
+    <h2 class="section-title">File operations</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">touch f</code></td><td class="desc">Create an empty file (or update its timestamp).</td></tr>
+      <tr><td class="keys"><code class="cmd">mkdir -p a/b/c</code></td><td class="desc">Make directories; <code class="cmd">-p</code> creates parents as needed and never errors if they exist.</td></tr>
+      <tr><td class="keys"><code class="cmd">cp -r src dst</code></td><td class="desc">Copy; <code class="cmd">-r</code> for directories. <code class="cmd">mv old new</code> renames or moves.</td></tr>
+      <tr><td class="keys"><code class="cmd">rm -r dir</code></td><td class="desc">Remove. <code class="cmd">-r</code> recurses into directories. Be careful &mdash; there is no trash.</td></tr>
+      <tr><td class="keys"><code class="cmd">chmod +x s.sh</code></td><td class="desc">Add the execute bit so you can run <code class="cmd">./s.sh</code>.</td></tr>
+    </table>
+
+    <h2 class="section-title">Variables &amp; quoting</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">name=value</code></td><td class="desc">Assign &mdash; <b>no spaces</b> around <code class="cmd">=</code>. Read it back with <code class="cmd">$name</code> (or the safer <code class="cmd">"$name"</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">"$var"</code></td><td class="desc">Double quotes expand variables but keep the result as one word. Always quote unless you have a reason not to.</td></tr>
+      <tr><td class="keys"><code class="cmd">'literal'</code></td><td class="desc">Single quotes are fully literal &mdash; no expansion of any kind.</td></tr>
+      <tr><td class="keys"><code class="cmd">export VAR=v</code></td><td class="desc">Mark a variable so child processes inherit it.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Quoting is the #1 source of bash bugs.</b> Unquoted, <code class="cmd">$var</code> is split on whitespace and any glob characters expand. Quoting with <code class="cmd">"$var"</code> stops both.
+    </div>
+
+    <h2 class="section-title">Redirection &amp; pipes</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">cmd &gt; f</code></td><td class="desc">Redirect stdout to file <b>f</b>, overwriting it. <code class="cmd">&gt;&gt;</code> appends instead.</td></tr>
+      <tr><td class="keys"><code class="cmd">cmd &lt; f</code></td><td class="desc">Feed file <b>f</b> as standard input.</td></tr>
+      <tr><td class="keys"><code class="cmd">a | b</code></td><td class="desc">Pipe: a's stdout becomes b's stdin, e.g. <code class="cmd">ls | grep txt</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">2&gt; /dev/null</code></td><td class="desc">Throw away stderr (fd 2). <code class="cmd">/dev/null</code> is the bit bucket.</td></tr>
+    </table>
+
+    <h2 class="section-title">Chaining commands</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">a ; b</code></td><td class="desc">Run a, then b, unconditionally.</td></tr>
+      <tr><td class="keys"><code class="cmd">a &amp;&amp; b</code></td><td class="desc">Run b only if a <b>succeeds</b> (exit 0).</td></tr>
+      <tr><td class="keys"><code class="cmd">a || b</code></td><td class="desc">Run b only if a <b>fails</b> (non-zero exit).</td></tr>
+    </table>
+    <div class="callout">
+      <b>Exit status:</b> every command sets <code class="cmd">$?</code>. <b>0</b> means success, anything else is failure. This is what <code class="cmd">&amp;&amp;</code>, <code class="cmd">||</code>, and <code class="cmd">if</code> test.
+    </div>
+
+    <h2 class="section-title">Handy keystrokes</h2>
+    <table>
+      <tr><td class="keys"><kbd>Tab</kbd></td><td class="desc">Complete commands and filenames; press twice to list candidates.</td></tr>
+      <tr><td class="keys"><kbd>&uarr;</kbd> / <kbd>&darr;</kbd></td><td class="desc">Walk through command history.</td></tr>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>r</kbd></td><td class="desc">Incremental reverse search through history.</td></tr>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>c</kbd></td><td class="desc">Interrupt the running command (SIGINT).</td></tr>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>l</kbd></td><td class="desc">Clear the screen (keeps your current line).</td></tr>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>a</kbd> / <kbd>Ctrl</kbd>+<kbd>e</kbd></td><td class="desc">Jump to start / end of the line.</td></tr>
+    </table>
+  </section>
+
+  <!-- INTERMEDIATE -->
+  <section class="panel" id="inter">
+    <h2 class="section-title">Globbing &amp; brace expansion</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">*</code></td><td class="desc">Any run of characters (not a leading dot). <code class="cmd">?</code> matches exactly one character.</td></tr>
+      <tr><td class="keys"><code class="cmd">[abc]</code></td><td class="desc">A character class &mdash; any one of a, b, or c. <code class="cmd">[a-z]</code> for ranges.</td></tr>
+      <tr><td class="keys"><code class="cmd">{1..5}</code></td><td class="desc">Brace expansion generates <code class="cmd">1 2 3 4 5</code>. <code class="cmd">{a..e}</code> gives letters.</td></tr>
+      <tr><td class="keys"><code class="cmd">cp f{,.bak}</code></td><td class="desc">Empty alternative trick &mdash; expands to <code class="cmd">cp f f.bak</code>.</td></tr>
+    </table>
+    <div class="callout">
+      Globs are expanded by the shell <b>before</b> the command runs. If nothing matches, the pattern is passed through literally by default (see <code class="cmd">nullglob</code> in Advanced).
+    </div>
+
+    <h2 class="section-title">Command substitution</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">$(cmd)</code></td><td class="desc">Run cmd and substitute its stdout, e.g. <code class="cmd">now=$(date +%F)</code>. Nests better than backticks.</td></tr>
+      <tr><td class="keys"><code class="cmd">$(( expr ))</code></td><td class="desc">Arithmetic expansion: <code class="cmd">echo $(( 3 + 4 * 2 ))</code> prints 11.</td></tr>
+    </table>
+
+    <h2 class="section-title">Parameter expansion</h2>
+    <p class="section-desc">String surgery without spawning <code class="cmd">sed</code> or <code class="cmd">cut</code>.</p>
+    <table>
+      <tr><td class="keys"><code class="cmd">${v:-def}</code></td><td class="desc">Value of v, or <b>def</b> if v is unset/empty (no assignment).</td></tr>
+      <tr><td class="keys"><code class="cmd">${v:=def}</code></td><td class="desc">Same, but also <b>assigns</b> def to v.</td></tr>
+      <tr><td class="keys"><code class="cmd">${#v}</code></td><td class="desc">Length of v in characters.</td></tr>
+      <tr><td class="keys"><code class="cmd">${v//a/b}</code></td><td class="desc">Replace <b>all</b> a with b (single slash replaces only the first).</td></tr>
+      <tr><td class="keys"><code class="cmd">${f%.txt}</code></td><td class="desc">Strip shortest suffix from the end (<code class="cmd">%%</code> = longest).</td></tr>
+      <tr><td class="keys"><code class="cmd">${p##*/}</code></td><td class="desc">Strip longest leading match &mdash; effectively basename. <code class="cmd">${p%/*}</code> gives dirname.</td></tr>
+      <tr><td class="keys"><code class="cmd">${v:2:3}</code></td><td class="desc">Substring: length 3 starting at offset 2 (zero-indexed).</td></tr>
+    </table>
+
+    <h2 class="section-title">Conditionals &amp; tests</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">[[ ... ]]</code></td><td class="desc">Preferred bash test keyword &mdash; safe with unquoted vars, supports <code class="cmd">&amp;&amp;</code>, <code class="cmd">||</code>, and <code class="cmd">=~</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">[[ -f p ]]</code></td><td class="desc"><code class="cmd">-f</code> regular file, <code class="cmd">-d</code> directory, <code class="cmd">-e</code> exists, <code class="cmd">-r</code> readable.</td></tr>
+      <tr><td class="keys"><code class="cmd">[[ -z "$s" ]]</code></td><td class="desc"><code class="cmd">-z</code> empty string, <code class="cmd">-n</code> non-empty.</td></tr>
+      <tr><td class="keys"><code class="cmd">(( a &gt; b ))</code></td><td class="desc">Arithmetic comparison. Inside <code class="cmd">[ ]</code> use <code class="cmd">-eq -ne -lt -gt -le -ge</code> for numbers.</td></tr>
+    </table>
+    <div class="callout">
+      <b><code class="cmd">[[ ]]</code> vs <code class="cmd">[ ]</code>:</b> single <code class="cmd">[ ]</code> is the old <code class="cmd">test</code> command and is subject to word splitting &mdash; <code class="cmd">[ $x = y ]</code> breaks if <code class="cmd">$x</code> is empty or has spaces. <code class="cmd">[[ ]]</code> is parsed as a keyword and avoids those traps.
+    </div>
+
+    <h2 class="section-title">Loops</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">for x in a b c; do ...; done</code></td><td class="desc">Iterate over a list of words.</td></tr>
+      <tr><td class="keys"><code class="cmd">for ((i=0;i&lt;10;i++)); do ...; done</code></td><td class="desc">C-style numeric loop with double parens.</td></tr>
+      <tr><td class="keys"><code class="cmd">while IFS= read -r line; do ...; done &lt; file</code></td><td class="desc">The robust way to read a file line by line.</td></tr>
+      <tr><td class="keys"><code class="cmd">until cond; do ...; done</code></td><td class="desc">Loop until the condition becomes true.</td></tr>
+    </table>
+
+    <h2 class="section-title">Functions</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">greet() { echo "hi $1"; }</code></td><td class="desc">Define a function. Call it like a command: <code class="cmd">greet world</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">$1 $2 ...</code></td><td class="desc">Positional arguments. <code class="cmd">$#</code> is the count, <code class="cmd">$0</code> the script/function name.</td></tr>
+      <tr><td class="keys"><code class="cmd">"$@"</code> vs <code class="cmd">"$*"</code></td><td class="desc"><code class="cmd">"$@"</code> = each arg as a separate word; <code class="cmd">"$*"</code> = all args joined into one word.</td></tr>
+      <tr><td class="keys"><code class="cmd">local v=x</code></td><td class="desc">Scope a variable to the function so it does not leak globally.</td></tr>
+    </table>
+
+    <h2 class="section-title">Arrays</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">arr=(a b c)</code></td><td class="desc">Indexed array, zero-based. <code class="cmd">${arr[0]}</code> is the first element.</td></tr>
+      <tr><td class="keys"><code class="cmd">"${arr[@]}"</code></td><td class="desc">All elements as separate words. <code class="cmd">${#arr[@]}</code> is the count.</td></tr>
+      <tr><td class="keys"><code class="cmd">arr+=(d)</code></td><td class="desc">Append an element.</td></tr>
+    </table>
+
+    <h2 class="section-title">History &amp; expansion</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">history</code></td><td class="desc">List previous commands. <code class="cmd">!n</code> reruns line n.</td></tr>
+      <tr><td class="keys"><code class="cmd">!!</code></td><td class="desc">The whole previous command, e.g. <code class="cmd">sudo !!</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">!$</code></td><td class="desc">Last argument of the previous command (<kbd>Alt</kbd>+<kbd>.</kbd> inserts it interactively).</td></tr>
+    </table>
+  </section>
+
+  <!-- ADVANCED -->
+  <section class="panel" id="adv">
+    <h2 class="section-title">Strict mode &amp; debugging</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">set -e</code></td><td class="desc">errexit &mdash; abort on the first uncaught failing command.</td></tr>
+      <tr><td class="keys"><code class="cmd">set -u</code></td><td class="desc">nounset &mdash; referencing an unset variable becomes an error (catches typos).</td></tr>
+      <tr><td class="keys"><code class="cmd">set -o pipefail</code></td><td class="desc">A pipeline fails if <b>any</b> stage fails, not just the last.</td></tr>
+      <tr><td class="keys"><code class="cmd">set -euo pipefail</code></td><td class="desc">The common "strict mode" header for robust scripts.</td></tr>
+      <tr><td class="keys"><code class="cmd">set -x</code></td><td class="desc">xtrace &mdash; print each command (prefixed with <code class="cmd">+</code>) before running it.</td></tr>
+    </table>
+    <div class="callout">
+      <b>errexit caveat:</b> commands on the left of <code class="cmd">&amp;&amp;</code>/<code class="cmd">||</code>, in <code class="cmd">if</code> conditions, or followed by <code class="cmd">|| true</code> are not aborted on, because their status is being tested. That is why <code class="cmd">cmd || true</code> is a safe "ignore this failure" idiom.
+    </div>
+
+    <h2 class="section-title">Traps</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">trap 'rm -f "$tmp"' EXIT</code></td><td class="desc">Run the handler whenever the script exits (normal, error, or signal) &mdash; ideal for cleanup.</td></tr>
+      <tr><td class="keys"><code class="cmd">trap handler INT TERM</code></td><td class="desc">Catch SIGINT (Ctrl-C) and SIGTERM. Note SIGKILL (9) cannot be trapped.</td></tr>
+      <tr><td class="keys"><code class="cmd">trap '' INT</code></td><td class="desc">Empty handler ignores the signal. <code class="cmd">trap - INT</code> restores the default.</td></tr>
+    </table>
+
+    <h2 class="section-title">Process substitution &amp; here-docs</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">diff &lt;(cmd1) &lt;(cmd2)</code></td><td class="desc"><code class="cmd">&lt;(...)</code> exposes a command's output as a file path &mdash; no temp files.</td></tr>
+      <tr><td class="keys"><code class="cmd">while read x; do ...; done &lt; &lt;(cmd)</code></td><td class="desc">Keeps the loop in the current shell, so variables set inside persist (unlike <code class="cmd">cmd | while</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">cat &lt;&lt;EOF ... EOF</code></td><td class="desc">Here-document: multi-line literal stdin. Quote the delimiter (<code class="cmd">&lt;&lt;'EOF'</code>) to stop expansion.</td></tr>
+      <tr><td class="keys"><code class="cmd">grep foo &lt;&lt;&lt; "$v"</code></td><td class="desc">Here-string: feed a single (expanded) string as stdin.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Subshell gotcha:</b> <code class="cmd">echo x | read v</code> leaves <code class="cmd">$v</code> empty because the right side of a pipe runs in a subshell. Use <code class="cmd">read v &lt;&lt;&lt; "x"</code> or process substitution to keep <code class="cmd">read</code> in the current shell.
+    </div>
+
+    <h2 class="section-title">Subshells &amp; grouping</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">( cmds )</code></td><td class="desc">Subshell &mdash; gets its own environment. <code class="cmd">cd</code> and variable changes inside do not leak out.</td></tr>
+      <tr><td class="keys"><code class="cmd">{ cmds; }</code></td><td class="desc">Group in the <b>current</b> shell (note the required spaces and trailing <code class="cmd">;</code>).</td></tr>
+      <tr><td class="keys"><code class="cmd">exec cmd</code></td><td class="desc">Replace the current shell with cmd; nothing after it runs.</td></tr>
+      <tr><td class="keys"><code class="cmd">exec 3&lt; file</code></td><td class="desc"><code class="cmd">exec</code> with only redirections manipulates the shell's own file descriptors.</td></tr>
+    </table>
+
+    <h2 class="section-title">Advanced expansion</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">${!ref}</code></td><td class="desc">Indirect expansion &mdash; value of the variable whose name is in <code class="cmd">ref</code>.</td></tr>
+      <tr><td class="keys"><code class="cmd">${v^^}</code> / <code class="cmd">${v,,}</code></td><td class="desc">Upper- / lowercase the whole value (bash 4+).</td></tr>
+      <tr><td class="keys"><code class="cmd">${v:?msg}</code></td><td class="desc">Abort with <b>msg</b> if v is unset &mdash; a one-liner required-argument assertion.</td></tr>
+      <tr><td class="keys"><code class="cmd">declare -A m</code></td><td class="desc">Associative (string-keyed) array. <code class="cmd">${!m[@]}</code> are the keys, <code class="cmd">${m[@]}</code> the values.</td></tr>
+      <tr><td class="keys"><code class="cmd">mapfile -t arr &lt; file</code></td><td class="desc">Read every line into an array, stripping newlines (bash 4+).</td></tr>
+    </table>
+
+    <h2 class="section-title">Shell options &amp; xargs</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">shopt -s nullglob</code></td><td class="desc">An unmatched glob expands to nothing instead of the literal pattern.</td></tr>
+      <tr><td class="keys"><code class="cmd">shopt -s globstar</code></td><td class="desc"><code class="cmd">**</code> matches files recursively across directories.</td></tr>
+      <tr><td class="keys"><code class="cmd">find . -print0 | xargs -0 cmd</code></td><td class="desc">Build argument lists from stdin; NUL separators (<code class="cmd">-print0</code>/<code class="cmd">-0</code>) survive spaces in names.</td></tr>
+    </table>
+
+    <h2 class="section-title">Job control</h2>
+    <table>
+      <tr><td class="keys"><code class="cmd">cmd &amp;</code></td><td class="desc">Run in the background. <code class="cmd">$!</code> holds its PID.</td></tr>
+      <tr><td class="keys"><kbd>Ctrl</kbd>+<kbd>z</kbd></td><td class="desc">Suspend the foreground job; <code class="cmd">bg</code> resumes it in the background, <code class="cmd">fg</code> brings it back.</td></tr>
+      <tr><td class="keys"><code class="cmd">jobs</code></td><td class="desc">List background/suspended jobs of this shell.</td></tr>
+      <tr><td class="keys"><code class="cmd">a &amp; b &amp; wait</code></td><td class="desc">Run a and b in parallel, then block until both finish.</td></tr>
+    </table>
+    <div class="callout">
+      <b>Pro move:</b> <code class="cmd">nohup cmd &gt; out.log 2&gt;&1 &amp;</code> detaches a job from the terminal so it survives logout. For interactive long-runners, reach for <code class="cmd">tmux</code> instead.
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="panel" id="quiz">
+    <div id="quiz-setup">
+      <h2 class="section-title">Test yourself</h2>
+      <p class="section-desc">Pick a difficulty and how many questions you want. Each round draws a fresh random set from the bank, and the answer order is shuffled too.</p>
+
+      <div class="setup-row">
+        <span class="setup-label">Difficulty</span>
+        <div class="seg" id="level-seg">
+          <button class="seg-btn active" data-level="beginner">Beginner</button>
+          <button class="seg-btn" data-level="intermediate">Intermediate</button>
+          <button class="seg-btn" data-level="advanced">Advanced</button>
+          <button class="seg-btn" data-level="mixed">Mixed</button>
+        </div>
+      </div>
+
+      <div class="setup-row">
+        <span class="setup-label">Questions</span>
+        <div class="seg" id="count-seg">
+          <button class="seg-btn active" data-count="5">5</button>
+          <button class="seg-btn" data-count="10">10</button>
+          <button class="seg-btn" data-count="15">15</button>
+          <button class="seg-btn" data-count="0">All</button>
+        </div>
+      </div>
+
+      <p class="bank-info" id="bank-info"></p>
+      <button class="btn" id="start-quiz">Start quiz</button>
+    </div>
+
+    <div id="quiz-play" class="hidden">
+      <div class="quiz-head">
+        <div class="progress-line" id="progress">Question 1</div>
+        <div class="score-pill" id="score">Score: 0</div>
+      </div>
+      <div id="quiz-body"></div>
+    </div>
+  </section>
+
+  <footer>Examples assume bash 4+. Quiz questions live in <code class="cmd">questions.js</code>.</footer>
+</div>
+
+<!-- Question bank: edit questions.js to add/remove questions -->
+<script src="questions.js"></script>
+<script>
+  // ---- Tabs ----
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    panels.forEach(p => p.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.target).classList.add('active');
+  }));
+
+  // ---- Quiz state ----
+  const BANK = window.BASH_QUESTIONS || [];
+  let chosenLevel = 'beginner';
+  let chosenCount = 5;
+  let QUESTIONS = [];           // the active drawn set, with options pre-shuffled
+  let idx = 0, score = 0, answered = false;
+
+  const setupEl = document.getElementById('quiz-setup');
+  const playEl = document.getElementById('quiz-play');
+  const bankInfo = document.getElementById('bank-info');
+  const body = document.getElementById('quiz-body');
+  const progressEl = document.getElementById('progress');
+  const scoreEl = document.getElementById('score');
+
+  // Fisher-Yates shuffle (returns a new array)
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function poolFor(level) {
+    return level === 'mixed' ? BANK : BANK.filter(q => q.level === level);
+  }
+
+  function updateBankInfo() {
+    const pool = poolFor(chosenLevel);
+    const want = chosenCount === 0 ? pool.length : Math.min(chosenCount, pool.length);
+    bankInfo.innerHTML = `Bank has <b>${pool.length}</b> ${chosenLevel === 'mixed' ? 'total' : chosenLevel} questions. This round will draw <b>${want}</b>.`;
+  }
+
+  // Segmented control wiring
+  function wireSeg(segId, onPick) {
+    const seg = document.getElementById(segId);
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onPick(btn);
+        updateBankInfo();
+      });
+    });
+  }
+  wireSeg('level-seg', btn => { chosenLevel = btn.dataset.level; });
+  wireSeg('count-seg', btn => { chosenCount = +btn.dataset.count; });
+
+  // Build the active question set: draw random questions, shuffle each one's options
+  function buildSet() {
+    const pool = poolFor(chosenLevel);
+    const drawn = shuffle(pool).slice(0, chosenCount === 0 ? pool.length : chosenCount);
+    QUESTIONS = drawn.map(item => {
+      const correctText = item.opts[item.correct];
+      const shuffledOpts = shuffle(item.opts);
+      return {
+        q: item.q,
+        opts: shuffledOpts,
+        correct: shuffledOpts.indexOf(correctText),
+        why: item.why,
+        level: item.level
+      };
+    });
+  }
+
+  document.getElementById('start-quiz').addEventListener('click', () => {
+    buildSet();
+    if (!QUESTIONS.length) { bankInfo.textContent = 'No questions available for that selection.'; return; }
+    idx = 0; score = 0;
+    setupEl.classList.add('hidden');
+    playEl.classList.remove('hidden');
+    render();
+  });
+
+  // ---- Quiz engine ----
+  function render() {
+    answered = false;
+    const item = QUESTIONS[idx];
+    progressEl.textContent = `Question ${idx + 1} of ${QUESTIONS.length}`;
+    scoreEl.textContent = `Score: ${score}`;
+    const badge = item.level ? `<span style="color:var(--muted);font-weight:400;text-transform:capitalize"> &middot; ${item.level}</span>` : '';
+    body.innerHTML = `
+      <div class="q-card">
+        <div class="q-num">Question ${idx + 1}${badge}</div>
+        <div class="q-text">${item.q}</div>
+        <div class="opts">
+          ${item.opts.map((o, i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}
+        </div>
+        <div class="explain" id="explain"><b>Why:</b> ${item.why}</div>
+        <div class="q-actions">
+          <button class="btn" id="next" disabled>${idx === QUESTIONS.length - 1 ? 'See results' : 'Next question'}</button>
+          <button class="btn ghost" id="quit">Quit</button>
+        </div>
+      </div>`;
+
+    body.querySelectorAll('.opt').forEach(btn => btn.addEventListener('click', () => choose(btn)));
+    document.getElementById('next').addEventListener('click', next);
+    document.getElementById('quit').addEventListener('click', backToSetup);
+  }
+
+  function choose(btn) {
+    if (answered) return;
+    answered = true;
+    const item = QUESTIONS[idx];
+    const chosen = +btn.dataset.i;
+    const opts = body.querySelectorAll('.opt');
+    opts.forEach((o, i) => {
+      o.disabled = true;
+      if (i === item.correct) o.classList.add('correct');
+      if (i === chosen && i !== item.correct) o.classList.add('wrong');
+    });
+    if (chosen === item.correct) score++;
+    scoreEl.textContent = `Score: ${score}`;
+    document.getElementById('explain').classList.add('show');
+    document.getElementById('next').disabled = false;
+  }
+
+  function next() {
+    if (idx < QUESTIONS.length - 1) { idx++; render(); }
+    else results();
+  }
+
+  function results() {
+    const total = QUESTIONS.length;
+    const pct = Math.round((score / total) * 100);
+    let msg;
+    if (pct === 100) msg = "Flawless. The shell bends to your will.";
+    else if (pct >= 75) msg = "Strong. A few expansions to nail down.";
+    else if (pct >= 50) msg = "Decent start. Revisit the guide tabs and retry.";
+    else msg = "Worth another pass through the guide. Then try again.";
+    progressEl.textContent = "Complete";
+    body.innerHTML = `
+      <div class="q-card result-card">
+        <div class="big">${score} / ${total}</div>
+        <div class="msg">${msg} (${pct}%)</div>
+        <div class="q-actions" style="justify-content:center">
+          <button class="btn" id="again">New round</button>
+          <button class="btn ghost" id="change">Change settings</button>
+        </div>
+      </div>`;
+    document.getElementById('again').addEventListener('click', () => {
+      buildSet(); idx = 0; score = 0; render();
+    });
+    document.getElementById('change').addEventListener('click', backToSetup);
+  }
+
+  function backToSetup() {
+    playEl.classList.add('hidden');
+    setupEl.classList.remove('hidden');
+  }
+
+  // Init
+  if (!BANK.length) {
+    bankInfo.innerHTML = '&#9888; Question bank failed to load. Make sure <code class="cmd">questions.js</code> sits next to this HTML file.';
+    document.getElementById('start-quiz').disabled = true;
+  } else {
+    updateBankInfo();
+  }
+</script>
+</body>
+</html>

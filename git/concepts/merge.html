@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How git merge really works</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+  .todo .ours{color:var(--base)} .todo .theirs{color:var(--feat)} .todo .marker{color:var(--accent)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>How <span class="dot">git merge</span> really works</h1>
+  <p class="sub">Merge does one thing rebase never does: it <b>joins</b> two lines of history without rewriting either of them.</p>
+
+  <p class="lead">A merge takes the work on one branch and brings it into another. Crucially, it does this <i>non-destructively</i>: every existing commit keeps its hash. Depending on the shape of the history, git does one of two things — it either <b>slides a pointer forward</b> (a fast-forward, no new commit at all) or it <b>creates a single new commit with two parents</b> (a three-way merge). Knowing which one happens, and why, is most of what there is to understand about merging.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> the branch you merge <i>into</i> (e.g. <code class="c">main</code>)</span>
+    <span><span class="dot-l feat"></span> the branch being merged <i>in</i> (e.g. <code class="c">feature</code>)</span>
+    <span><span class="dot-l new"></span> a merge commit (two parents, brand-new)</span>
+    <span><span class="dot-l ghost"></span> commit that moved branches, unchanged hash</span>
+  </div>
+
+  <h2>1 · Fast-forward: when the branch hasn't diverged</h2>
+  <p>You're on <code class="c">main</code> at commit <b>B</b>. You branched <code class="c">feature</code> off that same B and added <b>C</b> then <b>D</b>. Meanwhile <code class="c">main</code> got <i>no</i> new commits — it is still at B. Since B is a direct ancestor of D, the two histories have <b>not diverged</b>: <code class="c">feature</code> is simply <i>ahead</i> of <code class="c">main</code> in a straight line. Step through <code class="c">git merge feature</code> while on <code class="c">main</code>:</p>
+
+  <div class="scene" id="scene-ff"></div>
+
+  <div class="callout">
+    <b>Why no merge commit?</b> A merge commit exists to <i>reconcile two diverging lines</i>. Here there is nothing to reconcile — every commit on <code class="c">feature</code> already builds directly on top of where <code class="c">main</code> is. So git takes the cheapest possible action: it just moves the <code class="c">main</code> pointer forward to D. No new object is written; the result is a perfectly linear history. This is a <b>fast-forward</b>.
+  </div>
+
+  <h2>2 · <code class="c">--no-ff</code>: forcing a merge commit on purpose</h2>
+  <p>A fast-forward is tidy, but it makes the feature <i>disappear</i> as a unit — afterwards C and D look like they were always part of <code class="c">main</code>. Many teams don't want that. <code class="c">git merge --no-ff feature</code> tells git: even though you <i>could</i> fast-forward, don't — create a real merge commit anyway, so the feature shows up as a distinct bubble that can be reverted or read as one chunk. Same starting point as section 1; watch the difference:</p>
+
+  <div class="scene" id="scene-noff"></div>
+
+  <p class="muted" style="font-size:13.5px">The merge commit <b>M</b> has two parents: the old <code class="c">main</code> tip (B) and the feature tip (D). Reading <code class="c">git log --first-parent</code> now skips C and D, summarising the branch as a single step — exactly why teams enable <code class="c">--no-ff</code> for feature integration (and why GitHub's "Create a merge commit" button does the same thing).</p>
+
+  <div class="callout warn">
+    <b>ff vs no-ff at a glance.</b> Plain <code class="c">git merge</code> fast-forwards <i>when it can</i> (no divergence) and only builds a merge commit when it must. <code class="c">--no-ff</code> always builds one. The opposite, <code class="c">--ff-only</code>, refuses the merge unless a fast-forward is possible — handy in scripts that must keep history strictly linear.
+  </div>
+
+  <h2>3 · Three-way merge: when both branches moved</h2>
+  <p>This is the case a merge commit was invented for. Starting from base <b>B</b>, <code class="c">main</code> advanced to <b>C</b> while <code class="c">feature</code> independently advanced to <b>D</b> then <b>E</b>. Now <i>each branch has commits the other lacks</i> — the histories have <b>diverged</b>, so a fast-forward is impossible. Step through <code class="c">git merge feature</code> while on <code class="c">main</code>:</p>
+
+  <div class="scene" id="scene-3way"></div>
+
+  <p class="muted" style="font-size:13.5px">It's called a <b>three-way</b> merge because git compares <i>three</i> snapshots: the <b>merge base</b> B (common ancestor), <b>ours</b> = C (the tip of the branch you're on), and <b>theirs</b> = E (the tip you're merging in). For each file it asks "did this change relative to B, and on which side?" — changes on only one side are taken automatically; changes on both sides to the same lines become a conflict (section 4).</p>
+
+  <div class="callout">
+    <b>Nothing is rewritten — contrast with rebase.</b> C, D and E keep their original hashes; the only new object is the merge commit M, and M has <i>two</i> parents (C and E). The fork and the join are both preserved in history, a truthful record of what actually happened. <a href="rebase.html">Rebase</a>, by comparison, would copy D and E onto C as new-hash commits D′ and E′ and erase the fork entirely.
+  </div>
+
+  <h2>4 · When git can't auto-combine: merge conflicts</h2>
+  <p>The three-way merge auto-resolves any file changed on only one side. But when <b>the same lines were edited differently on both sides</b>, git has no way to know which version you want. It pauses the merge, writes <i>both</i> versions into the file surrounded by conflict markers, and waits for you to decide. A conflicted file looks like this:</p>
+
+  <div class="todo"><span class="marker">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</span>          <span class="cmt"># "ours" — the branch you are on (e.g. main)</span>
+<span class="ours">  port = 8080</span>
+<span class="marker">=======</span>
+<span class="theirs">  port = 3000</span>
+<span class="marker">&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature</span>      <span class="cmt"># "theirs" — the branch being merged in</span></div>
+
+  <p>Everything between <code class="c">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> and <code class="c">=======</code> is <b>ours</b> (your current branch); everything from <code class="c">=======</code> down to <code class="c">&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature</code> is <b>theirs</b>. You edit the file by hand to the final text you want — keeping one side, the other, or a hand-merged blend — and <b>delete all three marker lines</b>. Then you finish the merge:</p>
+
+  <div class="todo"><span class="cmt"># 1. edit each conflicted file; remove the &lt;&lt;&lt; === &gt;&gt;&gt; markers</span>
+<span class="cmt"># 2. stage the resolved files to tell git "this conflict is settled"</span>
+git add config.txt
+<span class="cmt"># 3. create the merge commit (git pre-fills a merge message)</span>
+git commit
+<span class="cmt">#    git merge --continue does the same thing</span>
+git merge --continue
+
+<span class="cmt"># changed your mind? throw the whole merge away, back to pre-merge state</span>
+git merge --abort</div>
+
+  <div class="callout">
+    <b>"ours" and "theirs" are positional, not moral.</b> During a normal merge, <i>ours</i> = the branch you ran <code class="c">git merge</code> from (where HEAD is), <i>theirs</i> = the branch named in the command. <code class="c">git checkout --ours config.txt</code> / <code class="c">--theirs config.txt</code> grab one whole side fast. (Heads-up: during a <i>rebase</i> the two are swapped, because rebase replays your commits on top of the other branch.)
+  </div>
+
+  <h2>5 · Why merge is the safe choice for shared branches</h2>
+  <p>This is the direct counterpart to rebase's <b>golden rule</b>. Rebase rewrites commits into new-hash copies, which is dangerous on history other people have already pulled. Merge never rewrites anything — existing commits keep their hashes, and integration only ever <i>adds</i> a merge commit on top. So merging is always safe on public, shared branches: nobody's existing commits move out from under them.</p>
+  <div class="callout">
+    <b>Rule of thumb.</b> Rebase your <i>local, unshared</i> work to keep it clean and linear; <b>merge</b> to integrate anything that has been pushed and shared. Merge tells the truth about history (forks and joins included); rebase tells a tidier story at the cost of rewriting it.
+  </div>
+
+  <h2>6 · The default strategy, and <code class="c">--squash</code></h2>
+  <p>Since Git 2.34 the default merge strategy is <b><code class="c">ort</code></b> ("Ostensibly Recursive's Twin") — a faster, cleaner reimplementation of the old <code class="c">recursive</code> strategy. It's what computes the three-way merge in section 3; you'll see <code class="c">Merge made by the 'ort' strategy</code> in the output. You rarely need to think about it, but you can pick others with <code class="c">-s</code> (e.g. <code class="c">-s octopus</code> to merge several branches at once).</p>
+  <p><code class="c">git merge --squash feature</code> is a different animal entirely. It takes <i>all</i> of a branch's combined changes and stages them in your working tree as <b>one set of changes</b> — but it does <b>not</b> create a merge commit and does <b>not</b> record a second parent. You then run <code class="c">git commit</code> yourself to produce a single ordinary commit. The feature's individual commits and the branch link are <i>not</i> carried over.</p>
+
+  <div class="compare">
+    <div class="scene" id="scene-realmerge"></div>
+    <div class="scene" id="scene-squash"></div>
+  </div>
+  <p class="muted" style="font-size:13.5px">Left: a real <code class="c">--no-ff</code> merge — commit M with two parents, feature history preserved. Right: <code class="c">--squash</code> — a single new commit S with <i>one</i> parent containing the same file changes, but no link back to the feature branch. Use squash when you want the result but not the messy intermediate commits; use a real merge when the branch's history matters.</p>
+
+  <h2>Check your understanding</h2>
+  <details class="reveal"><summary>You're on <code class="c">main</code>, it has no commits since you branched, and you run <code class="c">git merge feature</code>. Is a merge commit created?</summary>
+    <div class="body">No. Because <code class="c">main</code> hasn't diverged — every <code class="c">feature</code> commit builds directly on <code class="c">main</code>'s tip — git performs a <b>fast-forward</b>: it just slides the <code class="c">main</code> pointer to the feature tip. No new commit object is written and history stays linear. To force a merge commit here you'd use <code class="c">git merge --no-ff feature</code>.</div></details>
+  <details class="reveal"><summary>After a three-way merge, do the commits C, D and E still have their original hashes?</summary>
+    <div class="body">Yes. Merge is non-destructive: it never rewrites existing commits. The only new object is the merge commit M, which records <b>two parents</b> (the tip of each side) and points at the merged tree. This is exactly why merge is safe on shared/public branches, and the key contrast with rebase, which replaces commits with new-hash copies.</div></details>
+  <details class="reveal"><summary>In a conflict block, which side is "ours" and which is "theirs"?</summary>
+    <div class="body"><b>Ours</b> is the part between <code class="c">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> and <code class="c">=======</code> — the branch you were on when you ran merge. <b>Theirs</b> is from <code class="c">=======</code> to <code class="c">&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature</code> — the branch you named in the command. You edit to the final text, remove the markers, <code class="c">git add</code> the file, then <code class="c">git commit</code> (or <code class="c">git merge --continue</code>). <code class="c">git merge --abort</code> backs out entirely.</div></details>
+  <details class="reveal"><summary>How does <code class="c">git merge --squash feature</code> differ from a real merge?</summary>
+    <div class="body">A real merge creates a commit with <b>two</b> parents and preserves the branch's history. <code class="c">--squash</code> stages all of the branch's changes as one set in your working tree but creates <b>no merge commit</b> and records <b>no second parent</b>; you then make a single ordinary commit yourself. The result is one flat commit with no link back to the feature branch — the individual feature commits are discarded.</div></details>
+
+  <footer>Part of the Git concepts set · step through each diagram, then read the callouts.</footer>
+</div>
+
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git merge feature"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]   // merge commit = TWO parent edges
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+/* ---------------- Scene 1: fast-forward merge ---------------- */
+makeScene(document.getElementById('scene-ff'), [
+  {
+    narration:'Starting point. <b>main</b> is at <b>B</b>. You branched <b>feature</b> at B and added C→D. <b>main</b> got no new commits, so feature is simply <i>ahead</i> — the lines have <i>not</i> diverged.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'B',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  },
+  {
+    command:'git merge feature',
+    narration:'You are on <b>main</b> (at B). Git checks: is B an ancestor of the feature tip D? Yes — so a <b>fast-forward</b> is possible. No merge commit is needed; there is nothing to reconcile.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'B',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  },
+  {
+    command:'git merge feature',
+    narration:'Git simply <b>slides the main pointer forward</b> to D. No new commit object is created — C and D keep their hashes; only the branch ref moved. History is one straight line: A→B→C→D.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  }
+]);
+
+/* ---------------- Scene 2: --no-ff merge ---------------- */
+makeScene(document.getElementById('scene-noff'), [
+  {
+    narration:'Same start: <b>main</b> at B, <b>feature</b> ahead at D. A plain merge here would fast-forward. But we want the feature kept as a visible unit.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'B',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  },
+  {
+    command:'git merge --no-ff feature',
+    narration:'<code class="c">--no-ff</code> forbids the fast-forward. Git instead creates a new <b>merge commit M</b>, even though it didn\'t strictly need to.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'B',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  },
+  {
+    command:'git merge --no-ff feature',
+    narration:'<b>M</b> is created with <i>two</i> parents: the old main tip <b>B</b> and the feature tip <b>D</b>. <b>main</b> moves to M. The feature now reads as one distinct bubble that branched off and rejoined.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'},
+      {id:'M',col:4,row:1,kind:'new',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['M','B'],['M','D']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  }
+]);
+
+/* ---------------- Scene 3: three-way merge ---------------- */
+makeScene(document.getElementById('scene-3way'), [
+  {
+    narration:'Both branches moved. From base <b>B</b>, <b>main</b> advanced to <b>C</b>; <b>feature</b> independently advanced to D→<b>E</b>. Each side has commits the other lacks — the histories have <i>diverged</i>.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:2,row:0,kind:'feat'},{id:'E',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'feature',at:'E',kind:'branch'}]
+  },
+  {
+    command:'git merge feature',
+    narration:'A fast-forward is impossible (C is not an ancestor of E). So git finds the <b>merge base</b> — the common ancestor <b>B</b> — and lines up the three snapshots: base B, <i>ours</i> C, <i>theirs</i> E.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:2,row:0,kind:'feat'},{id:'E',col:3,row:0,kind:'feat'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'feature',at:'E',kind:'branch'}]
+  },
+  {
+    command:'git merge feature',
+    narration:'Git combines both sides\' changes (relative to B) into one tree and records a new <b>merge commit M</b> with <i>two parents</i>: C and E. Note <b>nothing was rewritten</b> — C, D and E keep their hashes.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:2,row:0,kind:'feat'},{id:'E',col:3,row:0,kind:'feat'},
+      {id:'M',col:4,row:1,kind:'new',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D'],['M','C'],['M','E']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'E',kind:'branch'}]
+  },
+  {
+    command:'git merge feature',
+    narration:'Finally <b>main</b> moves to M. The result keeps the full truth of what happened — a fork (at B) and a join (at M) — with M\'s two parent edges binding the two lines together.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:2,row:0,kind:'feat'},{id:'E',col:3,row:0,kind:'feat'},
+      {id:'M',col:4,row:1,kind:'new',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['D','B'],['E','D'],['M','C'],['M','E']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'feature',at:'E',kind:'branch'}]
+  }
+]);
+
+/* ---------------- Scene 6a: real merge (static) ---------------- */
+makeScene(document.getElementById('scene-realmerge'), [
+  {
+    narration:'<b>Real merge.</b> Commit <b>M</b> has <i>two</i> parents (B and D). The feature\'s own commits C and D stay in history, reachable through M\'s second parent.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},
+      {id:'C',col:2,row:0,kind:'feat'},{id:'D',col:3,row:0,kind:'feat'},
+      {id:'M',col:4,row:1,kind:'new',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['M','B'],['M','D']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  }
+],{static:true});
+
+/* ---------------- Scene 6b: squash merge (static) ---------------- */
+makeScene(document.getElementById('scene-squash'), [
+  {
+    narration:'<b>--squash.</b> A single new commit <b>S</b> with <i>one</i> parent (B) holds the same file changes as C+D combined — but no second parent and no link to feature. The feature commits live on only via the branch ref.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},
+      {id:'C',col:2,row:0,kind:'ghost'},{id:'D',col:3,row:0,kind:'ghost'},
+      {id:'S',col:2,row:1,kind:'new',label:'S'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['S','B']],
+    refs:[{name:'main',at:'S',kind:'head'},{name:'feature',at:'D',kind:'branch'}]
+  }
+],{static:true});
+</script>
+</body>
+</html>

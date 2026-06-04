@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Three Trees & git reset</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- three-trees custom diagram ---- */
+  .trees{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:18px 0 6px}
+  @media(max-width:680px){.trees{grid-template-columns:1fr}}
+  .tree{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 14px 16px;text-align:center}
+  .tree .ttl{font-family:var(--mono);font-size:12.5px;font-weight:600;letter-spacing:.2px}
+  .tree .tsub{font-size:11.5px;color:var(--muted);margin:3px 0 12px;min-height:30px}
+  .tree.head{border-color:var(--accent)} .tree.head .ttl{color:var(--accent)}
+  .tree.index{border-color:var(--feat)} .tree.index .ttl{color:var(--feat)}
+  .tree.work{border-color:var(--base)} .tree.work .ttl{color:var(--base)}
+  .ver{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:600;padding:8px 0;width:62px;border-radius:8px;border:1px solid var(--border);background:var(--key);color:var(--text)}
+  .ver.head{border-color:var(--accent);color:var(--accent)}
+  .ver.index{border-color:var(--feat);color:var(--feat)}
+  .ver.work{border-color:var(--base);color:var(--base)}
+  .flow{display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;margin:14px 0 2px;font-size:13px;color:var(--muted)}
+  .flow .arrow{font-family:var(--mono);color:var(--accent)}
+  .flow code.c{font-size:12px}
+
+  /* ---- soft/mixed/hard state indicator (rendered in narration) ---- */
+  .state{display:flex;gap:8px;margin-top:10px}
+  .cell{flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 6px;text-align:center;background:var(--key)}
+  .cell .lab{font-family:var(--mono);font-size:10px;letter-spacing:.3px;color:var(--muted);text-transform:uppercase}
+  .cell .val{font-family:var(--mono);font-size:12.5px;font-weight:600;margin-top:3px}
+  .cell.ok .val{color:var(--new)} .cell.warn .val{color:var(--feat)} .cell.bad .val{color:#e08b8b}
+  .cell.head{border-color:var(--accent)} .cell.head .lab{color:var(--accent)}
+
+  table.cmp{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  table.cmp th,table.cmp td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+  table.cmp th{background:var(--panel-2);font-weight:600;color:var(--text)}
+  table.cmp td{color:var(--muted)}
+  table.cmp code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>The Three Trees &amp; <span class="dot">git reset</span></h1>
+  <p class="sub">Every confusing thing <code class="c">git reset</code> does becomes obvious once you can see the three "trees" it moves between: <b>HEAD</b>, the <b>index</b>, and your <b>working directory</b>.</p>
+
+  <p class="lead">Git is not just a pile of commits. At any moment it is juggling <b>three trees</b> — three snapshots of your project. <code class="c">git add</code>, <code class="c">git commit</code>, <code class="c">git checkout</code> and <code class="c">git reset</code> are all just different ways of copying one tree onto another. Learn the three trees and <code class="c">reset</code>'s three modes (<code class="c">--soft</code>, <code class="c">--mixed</code>, <code class="c">--hard</code>) stop being scary.</p>
+
+  <h2>1 · The three trees</h2>
+  <p>A "tree" here just means a full snapshot of your files. Git keeps three of them in play:</p>
+
+  <div class="trees">
+    <div class="tree head">
+      <div class="ttl">HEAD</div>
+      <div class="tsub">The last commit — the snapshot your <i>next</i> commit's parent will be.</div>
+      <span class="ver head">v2</span>
+    </div>
+    <div class="tree index">
+      <div class="ttl">Index (staging area)</div>
+      <div class="tsub">The proposed <i>next</i> snapshot — what <code class="c">add</code> writes to, what <code class="c">commit</code> freezes.</div>
+      <span class="ver index">v2</span>
+    </div>
+    <div class="tree work">
+      <div class="ttl">Working Directory</div>
+      <div class="tsub">Your actual files on disk — what you edit in your editor.</div>
+      <span class="ver work">v3</span>
+    </div>
+  </div>
+  <p class="muted" style="font-size:13.5px;text-align:center;margin-top:4px">Here you've edited a file to <b>v3</b> on disk but not staged it: HEAD and the index still hold <b>v2</b>. That gap — <code class="c">git status</code> calls it "changes not staged for commit" — <i>is</i> the difference between two of the trees.</p>
+
+  <div class="flow">
+    <span><b style="color:var(--base)">Working Dir</b></span>
+    <span class="arrow">──<code class="c">git add</code>──▶</span>
+    <span><b style="color:var(--feat)">Index</b></span>
+    <span class="arrow">──<code class="c">git commit</code>──▶</span>
+    <span><b style="color:var(--accent)">HEAD</b> (new commit)</span>
+  </div>
+  <p><code class="c">git add</code> copies the working directory into the index. <code class="c">git commit</code> takes whatever is in the index, freezes it into a new commit, and advances <b>HEAD</b> (and the current branch) to point at it. Everything flows rightward when you build history. <code class="c">checkout</code>/<code class="c">switch</code> and <code class="c">reset</code> are the commands that push contents the <i>other</i> way — from a commit back into the index and working directory.</p>
+
+  <div class="callout">
+    <b>Why "the index" matters.</b> Because the index sits between your files and your commits, you get to decide <i>exactly</i> what goes into each commit — staging some files (or even some hunks, via <code class="c">git add -p</code>) and leaving others. <code class="c">git reset</code>'s whole job is to reposition these three trees relative to each other.
+  </div>
+
+  <h2>2 · What <code class="c">git reset &lt;commit&gt;</code> actually does</h2>
+  <p>The commit-moving form of reset is a <b>two-stage</b> operation, and the mode flag decides how far down the stack it goes:</p>
+  <div class="todo"><span class="cmt"># 1. ALWAYS: move the current branch pointer (and HEAD) to &lt;commit&gt;</span>
+<span class="cmt"># 2. --soft   : stop here. Index + working dir untouched.</span>
+<span class="cmt"># 3. --mixed  : also reset the INDEX to match &lt;commit&gt;   (this is the DEFAULT)</span>
+<span class="cmt"># 4. --hard   : also reset the WORKING DIR to match &lt;commit&gt;  (discards edits)</span>
+git reset [--soft | --mixed | --hard] &lt;commit&gt;</div>
+  <p>Each mode is a strict superset of the one above it. <code class="c">--soft</code> touches one tree (HEAD), <code class="c">--mixed</code> touches two (HEAD + index), <code class="c">--hard</code> touches all three (HEAD + index + working dir). The legend below colours each step's state.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> existing history</span>
+    <span><span class="dot-l feat"></span> the commit we'll reset away from (C)</span>
+    <span><span class="dot-l new"></span> where the branch lands</span>
+    <span><span class="dot-l ghost"></span> orphaned (reflog only)</span>
+  </div>
+
+  <h2>3 · <code class="c">git reset --soft HEAD~1</code></h2>
+  <p>Start from <b>A→B→C</b>, branch <code class="c">main</code> and <code class="c">HEAD</code> at <b>C</b>. <code class="c">--soft</code> moves the branch back to <b>B</b> and stops. C's changes are left sitting in the index, fully <b>staged</b> — as if you'd run <code class="c">git add</code> but not yet <code class="c">git commit</code>. This is the clean way to "undo the last commit but keep its work ready to re-commit".</p>
+  <div class="scene" id="scene-soft"></div>
+
+  <h2>4 · <code class="c">git reset --mixed HEAD~1</code> <span class="muted" style="font-size:14px;font-weight:400">(the default)</span></h2>
+  <p>Same branch move to <b>B</b>, but now git <i>also</i> resets the index to match B. C's changes survive in your <b>working directory</b> but are no longer staged — <code class="c">git status</code> shows them as "changes not staged for commit". Running <code class="c">git reset HEAD~1</code> with no flag does exactly this. It's the everyday "uncommit and unstage, let me redo the staging" move.</p>
+  <div class="scene" id="scene-mixed"></div>
+
+  <h2>5 · <code class="c">git reset --hard HEAD~1</code> <span style="color:var(--feat);font-size:14px;font-weight:600">⚠ destructive</span></h2>
+  <p>Branch moves to <b>B</b>, the index resets to B, <i>and</i> the working directory is overwritten to match B. C's changes are <b>gone</b> from all three trees. The commit C itself still lingers in the object database (recoverable via reflog for a while), but any <i>uncommitted</i> edits you had in the working tree are destroyed with no reflog to save them.</p>
+  <div class="scene" id="scene-hard"></div>
+
+  <div class="callout warn">
+    <b>What reflog can and cannot recover.</b> <code class="c">git reset --hard</code> on <i>committed</i> work is recoverable: <code class="c">git reflog</code> still lists the old tip, so <code class="c">git reset --hard HEAD@{1}</code> brings it back (until garbage collection, typically weeks). But <code class="c">--hard</code> also blows away any <i>uncommitted</i> edits in the working directory, and those were never in a commit — the reflog cannot help. Commit or <code class="c">git stash</code> before a hard reset if you're unsure.
+  </div>
+
+  <h2>6 · Side-by-side: where do the changes end up?</h2>
+  <p>All three start from the same A→B→C with HEAD at C and run <code class="c">… HEAD~1</code>. The only difference is the final state of the index and working directory:</p>
+  <table class="cmp">
+    <tr><th>Mode</th><th>Branch / HEAD</th><th>Index</th><th>Working Dir</th><th>C's changes end up…</th></tr>
+    <tr><td><code class="c">--soft</code></td><td>moved to B</td><td><b style="color:var(--feat)">untouched</b> (still C)</td><td><b style="color:var(--base)">untouched</b> (still C)</td><td><b style="color:var(--new)">staged</b>, ready to commit</td></tr>
+    <tr><td><code class="c">--mixed</code> <span class="muted">(default)</span></td><td>moved to B</td><td>reset to B</td><td><b style="color:var(--base)">untouched</b> (still C)</td><td><b style="color:var(--feat)">unstaged</b> in working dir</td></tr>
+    <tr><td><code class="c">--hard</code></td><td>moved to B</td><td>reset to B</td><td>reset to B</td><td><b style="color:#e08b8b">discarded</b> (gone)</td></tr>
+  </table>
+  <p class="muted" style="font-size:13.5px">Read it as a ladder: each mode does everything the one above it does, plus resets one more tree. The branch pointer always moves; the question is only how many of the other two trees follow it back.</p>
+
+  <h2>7 · reset vs revert vs restore</h2>
+  <p>Three commands sound like "undo" but do very different things. Pick by asking: <i>am I rewriting history, recording an inverse, or just touching files?</i></p>
+  <table class="cmp">
+    <tr><th>Command</th><th>Moves HEAD / branch?</th><th>What it does</th><th>Safe on shared history?</th></tr>
+    <tr><td><code class="c">git reset</code></td><td><b>Yes</b></td><td>Moves the branch pointer back; optionally resets index/working dir. <i>Rewrites</i> history.</td><td><b style="color:var(--feat)">No</b> — never on pushed commits</td></tr>
+    <tr><td><code class="c">git revert</code></td><td>No (adds a commit)</td><td>Creates a <b>new</b> commit that applies the <i>inverse</i> of a target commit. History stays intact.</td><td><b style="color:var(--new)">Yes</b> — the safe undo</td></tr>
+    <tr><td><code class="c">git restore</code></td><td><b>No</b></td><td>Operates on <i>files only</i>. Copies content from a commit/index into the index or working dir.</td><td><b style="color:var(--new)">Yes</b> — touches no commits</td></tr>
+  </table>
+
+  <h3>reset vs revert on a shared branch</h3>
+  <p>If <b>C</b> has been pushed and a teammate already based work on it, <code class="c">reset --hard HEAD~1</code> rewrites the branch out from under them — their history and yours diverge. <code class="c">git revert C</code> instead adds a new commit <b>C′</b> that undoes C's changes, leaving every existing hash in place. Same end state of the files, totally different (and safe) history:</p>
+  <div class="compare">
+    <div class="scene" id="scene-reset-shared"></div>
+    <div class="scene" id="scene-revert-shared"></div>
+  </div>
+  <p class="muted" style="font-size:13.5px">Left: <code class="c">reset</code> discards C and rewinds the pointer — fine locally, dangerous if C was shared. Right: <code class="c">revert</code> keeps C and appends <b>C′</b> (an "anti-C") — the history of what happened is preserved, which is exactly what collaborators need.</p>
+
+  <h3>The <code class="c">restore</code> family — files, never HEAD</h3>
+  <p><code class="c">git restore</code> is the modern, file-scoped sibling. It never moves a branch:</p>
+  <div class="todo"><span class="cmt"># unstage a file — same effect as a mixed-reset of ONE path</span>
+git restore --staged &lt;file&gt;        <span class="cmt"># (older form: git reset HEAD &lt;file&gt;)</span>
+<span class="cmt"># discard working-dir changes to a file, reverting it to the index/HEAD version</span>
+git restore &lt;file&gt;                  <span class="cmt"># ⚠ throws away your edits to that file</span>
+<span class="cmt"># do both: discard staged AND working-dir changes</span>
+git restore --staged --worktree &lt;file&gt;</div>
+
+  <h3><code class="c">git reset &lt;paths&gt;</code> — the path form moves nothing</h3>
+  <p>One more source of confusion: <code class="c">git reset</code> with file paths behaves completely differently from <code class="c">git reset &lt;commit&gt;</code>. With paths, git <b>does not move HEAD at all</b> — it only copies those paths from HEAD (or a given commit) back into the index, i.e. it <b>unstages</b> them. There is no <code class="c">--soft</code>/<code class="c">--hard</code> with paths.</p>
+  <div class="todo"><span class="cmt"># unstage these files — HEAD stays put, working dir untouched</span>
+git reset HEAD &lt;file&gt;...
+<span class="cmt"># vs. the commit form, which MOVES the branch pointer</span>
+git reset --mixed HEAD~1</div>
+  <div class="callout">
+    <b>Two reset commands wearing one name.</b> <code class="c">git reset &lt;commit&gt;</code> moves your branch (history surgery). <code class="c">git reset &lt;paths&gt;</code> just unstages files (no pointer moves). The default mode of the commit form is <code class="c">--mixed</code>; the path form is effectively always a per-file mixed reset. When in doubt, prefer the clearer modern spellings: <code class="c">git switch</code>/<code class="c">git restore --staged</code> for the file cases, <code class="c">git reset --soft|--mixed|--hard</code> only when you truly mean to move the branch.
+  </div>
+
+  <h2>Check your understanding</h2>
+  <details class="reveal"><summary>You ran <code class="c">git reset --soft HEAD~1</code>. Where are the last commit's changes now, and what one command re-creates the commit?</summary>
+    <div class="body">The branch moved back one commit, but the index and working directory were untouched — so the changes are still fully <b>staged</b>. A plain <code class="c">git commit</code> (which freezes the index) re-creates a commit from exactly those changes. This is the idiomatic way to "redo the last commit message" or fold the last commit into a re-stage.</div></details>
+  <details class="reveal"><summary>Which reset mode is the default, and what state does it leave your changes in?</summary>
+    <div class="body"><code class="c">--mixed</code> is the default (so <code class="c">git reset HEAD~1</code> = <code class="c">git reset --mixed HEAD~1</code>). It moves the branch and resets the index to match, but leaves the working directory alone — so the undone commit's changes are present on disk but <b>unstaged</b>. <code class="c">git status</code> shows them under "changes not staged for commit".</div></details>
+  <details class="reveal"><summary>You did <code class="c">git reset --hard HEAD~1</code> and lost work. The commit was pushed earlier; you'd also made uncommitted edits. What's recoverable?</summary>
+    <div class="body">The <b>committed</b> work is recoverable: <code class="c">git reflog</code> still shows the old tip, so <code class="c">git reset --hard HEAD@{1}</code> (or the commit's hash) restores it. The <b>uncommitted</b> edits in your working directory are <b>not</b> — they were never in any commit, so the reflog has nothing to point to. Hard reset overwrote them. Lesson: commit or <code class="c">git stash</code> before a hard reset.</div></details>
+  <details class="reveal"><summary>Commit C is already pushed and a colleague branched off it. You need to undo C's changes. <code class="c">reset</code> or <code class="c">revert</code>?</summary>
+    <div class="body"><code class="c">git revert C</code>. It creates a <b>new</b> commit that inverts C's changes while leaving C — and every other hash — in place, so your colleague's history still lines up. <code class="c">reset</code> would rewrite the branch and make your histories diverge, forcing a dangerous force-push and breaking everyone downstream. Reset is for <i>local, unshared</i> history; revert is the shared-history-safe undo.</div></details>
+  <details class="reveal"><summary>What's the difference between <code class="c">git reset HEAD file.txt</code> and <code class="c">git reset HEAD~1</code>?</summary>
+    <div class="body">The first has a <b>path</b>, so it's the path form: it <i>unstages</i> <code class="c">file.txt</code> and moves <b>nothing</b> — HEAD and the working directory are unchanged (equivalent to <code class="c">git restore --staged file.txt</code>). The second has <b>no path</b>, so it's the commit form: it <i>moves the branch</i> back one commit (a mixed reset by default). Same verb, two very different operations.</div></details>
+
+  <footer>Part of the Git concepts set · step through each diagram, then read the callouts. Three trees: HEAD · index · working directory.</footer>
+</div>
+
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine (verbatim from rebase.html).
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git reset --soft HEAD~1"   // optional, shown in command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+/* small helper: build the three-tree state strip for narration HTML */
+function stateStrip(head, index, work){
+  function cell(lab, val, cls){
+    return '<div class="cell '+cls+'"><div class="lab">'+lab+'</div><div class="val">'+val+'</div></div>';
+  }
+  return '<div class="state">'+
+    cell('HEAD / branch', head.v, 'head')+
+    cell('Index', index.v, index.cls)+
+    cell('Working dir', work.v, work.cls)+
+    '</div>';
+}
+
+/* base A→B→C scene used by the three reset modes */
+function abc(extra){
+  return [
+    {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'feat'}
+  ];
+}
+
+/* ---------------- Scene: reset --soft HEAD~1 ---------------- */
+makeScene(document.getElementById('scene-soft'), [
+  {
+    narration:'Starting point: history <b>A→B→C</b>, with <b>main</b> and <b>HEAD</b> at C. All three trees agree — HEAD, index and working dir all hold C\'s snapshot.'
+      + stateStrip({v:'C'},{v:'C',cls:'ok'},{v:'C',cls:'ok'}),
+    commits:[{id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'feat'}],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git reset --soft HEAD~1',
+    narration:'<b>--soft</b> moves <i>only</i> the branch pointer back to <b>B</b>. The index and working directory are left exactly as they were — both still hold C\'s snapshot. C itself is now orphaned from the branch (still in the reflog).'
+      + stateStrip({v:'B'},{v:'C',cls:'ok'},{v:'C',cls:'ok'}),
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'new'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  },
+  {
+    narration:'<b>Result:</b> the commit is undone, but its changes sit fully <b>staged</b> in the index (index ≠ HEAD). A plain <code class="c">git commit</code> would re-freeze them into a new commit. This is the clean "uncommit but keep it ready" move.'
+      + stateStrip({v:'B'},{v:'C → staged',cls:'warn'},{v:'C',cls:'ok'}),
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'new'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene: reset --mixed HEAD~1 ---------------- */
+makeScene(document.getElementById('scene-mixed'), [
+  {
+    narration:'Same start: <b>A→B→C</b>, <b>HEAD</b> at C, all three trees in sync on C.'
+      + stateStrip({v:'C'},{v:'C',cls:'ok'},{v:'C',cls:'ok'}),
+    commits:[{id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'feat'}],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git reset --mixed HEAD~1',
+    narration:'<b>--mixed</b> (the default) moves the branch to <b>B</b> <i>and</i> resets the index to match B. The working directory is still untouched, so C\'s changes remain on disk — but they are no longer staged.'
+      + stateStrip({v:'B'},{v:'B',cls:'ok'},{v:'C',cls:'warn'}),
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'new'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  },
+  {
+    narration:'<b>Result:</b> C\'s changes are present in the working directory but <b>unstaged</b> — <code class="c">git status</code> lists them under "changes not staged for commit". You re-decide what to <code class="c">git add</code>. <code class="c">git reset HEAD~1</code> with no flag does exactly this.'
+      + stateStrip({v:'B'},{v:'B',cls:'ok'},{v:'C → unstaged',cls:'warn'}),
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'new'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene: reset --hard HEAD~1 ---------------- */
+makeScene(document.getElementById('scene-hard'), [
+  {
+    narration:'Same start: <b>A→B→C</b>, <b>HEAD</b> at C, all three trees on C.'
+      + stateStrip({v:'C'},{v:'C',cls:'ok'},{v:'C',cls:'ok'}),
+    commits:[{id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'feat'}],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git reset --hard HEAD~1',
+    narration:'<b>--hard</b> moves the branch to <b>B</b>, resets the index to B, <i>and</i> overwrites the working directory to B. All three trees snap back to B in one move.'
+      + stateStrip({v:'B'},{v:'B',cls:'ok'},{v:'B',cls:'ok'}),
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'new'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  },
+  {
+    narration:'<b>Result:</b> C\'s changes are <b>discarded</b> from every tree. Commit C still lingers in the object store — <code class="c">git reflog</code> can recover it with <code class="c">git reset --hard HEAD@{1}</code>. But any <i>uncommitted</i> edits you had are gone for good, no reflog can restore them.'
+      + stateStrip({v:'B'},{v:'B',cls:'ok'},{v:'B (C discarded)',cls:'bad'}),
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'new'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene: reset on shared branch (static) ---------------- */
+makeScene(document.getElementById('scene-reset-shared'), [
+  {
+    command:'git reset --hard HEAD~1',
+    narration:'<b>reset</b> rewinds <b>main</b> to B and throws C away. History now reads A→B as if C never happened. Fine if C was local — but if C was pushed, your branch and your teammate\'s diverge.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'new'},{id:'C',col:2,row:0,kind:'ghost'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'B',kind:'head'}]
+  }
+],{static:true});
+
+/* ---------------- Scene: revert on shared branch (static) ---------------- */
+makeScene(document.getElementById('scene-revert-shared'), [
+  {
+    command:'git revert C',
+    narration:'<b>revert</b> keeps C and <i>appends</i> a new commit <b>C′</b> that undoes C\'s changes. Every existing hash stays put, so collaborators\' history still lines up. The files end up the same as a reset to B — but the record is preserved.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'feat'},
+      {id:'Cr',col:3,row:0,kind:'new',label:"C′"}
+    ],
+    edges:[['B','A'],['C','B'],['Cr','C']],
+    refs:[{name:'main',at:'Cr',kind:'head'}]
+  }
+],{static:true});
+</script>
+</body>
+</html>

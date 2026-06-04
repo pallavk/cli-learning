@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git, deeply — concept explainers</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:32px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px;max-width:640px}
+  .lead{font-size:16.5px;color:var(--text);max-width:680px}
+  h2{font-size:18px;margin:40px 0 10px;font-weight:620;letter-spacing:-.2px;color:var(--muted);text-transform:uppercase;font-size:13px;letter-spacing:1px}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+  @media(max-width:680px){.grid{grid-template-columns:1fr}}
+  .card{display:block;text-decoration:none;color:inherit;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 20px 18px;transition:border-color .2s,transform .12s,background .2s;position:relative;overflow:hidden}
+  .card:hover{border-color:var(--accent);transform:translateY(-2px);background:var(--panel-2)}
+  .card .num{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+  .card h3{font-size:18px;margin:6px 0 8px;font-weight:640;letter-spacing:-.2px;color:var(--text)}
+  .card h3 .arrow{opacity:0;margin-left:6px;transition:opacity .2s}
+  .card:hover h3 .arrow{opacity:1}
+  .card .desc{font-size:13.5px;color:var(--muted);margin:0 0 12px;line-height:1.55}
+  .card .hard{font-size:12.5px;color:var(--feat);background:rgba(224,168,107,.10);border-left:2px solid var(--feat);border-radius:0 6px 6px 0;padding:7px 11px}
+  .card .hard b{color:var(--feat)}
+  .tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
+  .tag{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:2px 7px}
+
+  .note{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:24px 0;font-size:14px;max-width:700px}
+  .note b{color:var(--text)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:50px}
+  footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../git-guide.html">← Git cheatsheet &amp; quiz</a>
+  <h1>Git, <span class="dot">deeply</span></h1>
+  <p class="sub">Interactive explainers for the git concepts that don't click from a cheatsheet. Each one animates what actually happens to commits, pointers, and your files — step by step.</p>
+
+  <p class="lead">Most git confusion comes from one thing: the commands describe <i>what to type</i>, not <i>what moves</i>. These pages show the moving parts — the commit graph, the branch pointers, HEAD, the index, your working directory — and let you step through each operation and watch them change.</p>
+
+  <div class="note">
+    <b>Read them in this order</b> if you're starting fresh: <b>HEAD &amp; refs</b> first (everything else builds on pointers), then <b>three trees &amp; reset</b>, then <b>merge</b>, <b>rebase</b>, <b>worktree</b>, and <b>reflog</b> last as the safety net that makes all the rest fearless. The <b>everyday operations</b> below (cherry-pick, revert, stash, bisect) stand on their own — dip into them whenever you hit one.
+  </div>
+
+  <h2>The explainers</h2>
+  <div class="grid">
+
+    <a class="card" href="head-refs.html">
+      <div class="num">01</div>
+      <h3>HEAD, refs &amp; detached HEAD<span class="arrow">→</span></h3>
+      <p class="desc">What a branch <i>actually is</i> (a 41-byte file), how HEAD points to "where you are", and the detached-HEAD state that strands commits.</p>
+      <div class="hard"><b>Why it's hard:</b> branches feel like containers but are just movable pointers. "Detached HEAD" sounds like an error; it's a position.</div>
+      <div class="tags"><span class="tag">branch = pointer</span><span class="tag">symbolic ref</span><span class="tag">~ vs ^ vs ^2</span></div>
+    </a>
+
+    <a class="card" href="reset.html">
+      <div class="num">02</div>
+      <h3>Three trees &amp; git reset<span class="arrow">→</span></h3>
+      <p class="desc">HEAD, the index, and your working directory — the three "trees" git juggles — and exactly what <code class="c">--soft</code>, <code class="c">--mixed</code>, and <code class="c">--hard</code> do to each.</p>
+      <div class="hard"><b>Why it's hard:</b> one command with three modes that look similar but stage, unstage, or <i>destroy</i> your work.</div>
+      <div class="tags"><span class="tag">index</span><span class="tag">soft/mixed/hard</span><span class="tag">reset vs revert</span></div>
+    </a>
+
+    <a class="card" href="merge.html">
+      <div class="num">03</div>
+      <h3>How git merge really works<span class="arrow">→</span></h3>
+      <p class="desc">Fast-forward vs <code class="c">--no-ff</code> vs the three-way merge, the merge base, two-parent merge commits, and reading conflict markers.</p>
+      <div class="hard"><b>Why it's hard:</b> sometimes a merge makes a commit, sometimes it doesn't — and the "three-way" part is invisible from the command.</div>
+      <div class="tags"><span class="tag">fast-forward</span><span class="tag">merge base</span><span class="tag">conflicts</span></div>
+    </a>
+
+    <a class="card" href="rebase.html">
+      <div class="num">04</div>
+      <h3>Understanding git rebase<span class="arrow">→</span></h3>
+      <p class="desc">Rebase doesn't move commits — it <i>replays</i> them as new commits onto a new base. Plus interactive rebase, <code class="c">--onto</code>, and the golden rule.</p>
+      <div class="hard"><b>Why it's hard:</b> "rewriting history" sounds dangerous and magical. It's just copy-with-new-parent, but the hashes change.</div>
+      <div class="tags"><span class="tag">replay</span><span class="tag">interactive</span><span class="tag">vs merge</span></div>
+    </a>
+
+    <a class="card" href="worktree.html">
+      <div class="num">05</div>
+      <h3>git worktree<span class="arrow">→</span></h3>
+      <p class="desc">One repository, many working directories — each checked out to a different branch, at once. No second clone, no stashing to switch context.</p>
+      <div class="hard"><b>Why it's hard:</b> it breaks the "one folder = one branch" assumption everyone starts with.</div>
+      <div class="tags"><span class="tag">shared .git</span><span class="tag">no stash</span><span class="tag">same-branch rule</span></div>
+    </a>
+
+    <a class="card" href="reflog.html">
+      <div class="num">06</div>
+      <h3>git reflog: your safety net<span class="arrow">→</span></h3>
+      <p class="desc">Git records every move HEAD makes. So a bad reset, a botched rebase, or a deleted branch is almost always recoverable — here's how.</p>
+      <div class="hard"><b>Why it's hard:</b> it's invisible until you need it, and <code class="c">HEAD@{1}</code> (reflog time) is easily confused with <code class="c">HEAD~1</code> (ancestry).</div>
+      <div class="tags"><span class="tag">recovery</span><span class="tag">HEAD@{n}</span><span class="tag">undo anything</span></div>
+    </a>
+
+  </div>
+
+  <h2>Everyday operations — moving &amp; undoing work</h2>
+  <div class="grid">
+
+    <a class="card" href="cherry-pick.html">
+      <div class="num">07</div>
+      <h3>Cherry-pick<span class="arrow">→</span></h3>
+      <p class="desc">Copy the <i>changes</i> of one specific commit onto your current branch — a fresh commit with the same diff but a new hash. Copy, not move.</p>
+      <div class="hard"><b>Why it's hard:</b> it looks like "moving" a commit, but the original stays put and the hash changes — and picking across branches you'll later merge can double-apply.</div>
+      <div class="tags"><span class="tag">copy one commit</span><span class="tag">new hash</span><span class="tag">backport</span></div>
+    </a>
+
+    <a class="card" href="revert.html">
+      <div class="num">08</div>
+      <h3>Revert: undo by moving forward<span class="arrow">→</span></h3>
+      <p class="desc">Undo a commit by appending its <i>inverse</i> as a new commit — history preserved, safe to push. The forward-moving opposite of <code class="c">reset</code>.</p>
+      <div class="hard"><b>Why it's hard:</b> constantly confused with reset; reverting a merge commit needs <code class="c">-m</code> and carries a re-merge gotcha.</div>
+      <div class="tags"><span class="tag">inverse diff</span><span class="tag">vs reset</span><span class="tag">safe undo</span></div>
+    </a>
+
+    <a class="card" href="stash.html">
+      <div class="num">09</div>
+      <h3>Stash: work parked as commits<span class="arrow">→</span></h3>
+      <p class="desc">Park uncommitted work on a hidden ref and clean your tree. A stash entry is secretly a <b>commit with two parents</b> — once you see that, it all makes sense.</p>
+      <div class="hard"><b>Why it's hard:</b> it feels like a clipboard but it's commits; a pop that conflicts <i>keeps</i> the entry; and the stash is global, not per-branch.</div>
+      <div class="tags"><span class="tag">refs/stash</span><span class="tag">two parents</span><span class="tag">pop vs apply</span></div>
+    </a>
+
+    <a class="card" href="bisect.html">
+      <div class="num">10</div>
+      <h3>Bisect: binary-search a bug<span class="arrow">→</span></h3>
+      <p class="desc">Find the commit that introduced a regression in <code class="c">log₂(N)</code> tests — nine, not four hundred. Fully automatable with <code class="c">git bisect run</code>.</p>
+      <div class="hard"><b>Why it's hard:</b> it's a <i>workflow</i>, not one command; it strands you in a detached HEAD while it runs; and it assumes the bug is monotonic.</div>
+      <div class="tags"><span class="tag">binary search</span><span class="tag">bisect run</span><span class="tag">good / bad</span></div>
+    </a>
+
+  </div>
+
+  <div class="note" style="border-left-color:var(--feat);margin-top:34px">
+    <b>Want commands, not concepts?</b> The <a href="../git-guide.html">git cheatsheet &amp; quiz</a> covers day-to-day usage and lets you test yourself across beginner, intermediate, and advanced levels.
+  </div>
+
+  <footer>
+    Part of the <a href="../git-guide.html">git</a> learning set · self-contained, no network required
+  </footer>
+</div>
+</body>
+</html>
