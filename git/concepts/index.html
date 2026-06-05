@@ -55,7 +55,7 @@
   <p class="lead">Most git confusion comes from one thing: the commands describe <i>what to type</i>, not <i>what moves</i>. These pages show the moving parts — the commit graph, the branch pointers, HEAD, the index, your working directory — and let you step through each operation and watch them change.</p>
 
   <div class="note">
-    <b>Read them in this order</b> if you're starting fresh: <b>HEAD &amp; refs</b> first (everything else builds on pointers), then <b>three trees &amp; reset</b>, then <b>merge</b>, <b>rebase</b>, <b>worktree</b>, and <b>reflog</b> last as the safety net that makes all the rest fearless. The <b>everyday operations</b> below (cherry-pick, revert, stash, bisect) stand on their own — dip into them whenever you hit one.
+    <b>Read them in this order</b> if you're starting fresh: <b>HEAD &amp; refs</b> first (everything else builds on pointers), then <b>three trees &amp; reset</b>, then <b>merge</b>, <b>rebase</b>, <b>worktree</b>, and <b>reflog</b> last as the safety net that makes all the rest fearless. The <b>everyday operations</b> (cherry-pick, revert, stash, bisect) and the <b>collaboration &amp; deeper cuts</b> (remotes, pull requests, tags, the staging area) below stand on their own — dip into them whenever you hit one.
   </div>
 
   <h2>The explainers</h2>
@@ -144,6 +144,43 @@
       <p class="desc">Find the commit that introduced a regression in <code class="c">log₂(N)</code> tests — nine, not four hundred. Fully automatable with <code class="c">git bisect run</code>.</p>
       <div class="hard"><b>Why it's hard:</b> it's a <i>workflow</i>, not one command; it strands you in a detached HEAD while it runs; and it assumes the bug is monotonic.</div>
       <div class="tags"><span class="tag">binary search</span><span class="tag">bisect run</span><span class="tag">good / bad</span></div>
+    </a>
+
+  </div>
+
+  <h2>Collaborating &amp; deeper cuts</h2>
+  <div class="grid">
+
+    <a class="card" href="remotes.html">
+      <div class="num">11</div>
+      <h3>Remotes &amp; tracking branches<span class="arrow">→</span></h3>
+      <p class="desc">What <code class="c">origin/main</code> <i>actually is</i> — a cached pointer, not the live server — and how <code class="c">fetch</code>, <code class="c">pull</code>, and <code class="c">push</code> move commits and pointers across the gap.</p>
+      <div class="hard"><b>Why it's hard:</b> <code class="c">fetch</code> vs <code class="c">pull</code> is invisible from the command, and <code class="c">origin/main</code> looks live but is a stale local bookmark until you sync.</div>
+      <div class="tags"><span class="tag">origin/main = cache</span><span class="tag">fetch vs pull</span><span class="tag">ahead / behind</span></div>
+    </a>
+
+    <a class="card" href="pull-requests.html">
+      <div class="num">12</div>
+      <h3>Pull requests<span class="arrow">→</span></h3>
+      <p class="desc">A PR isn't a git command — it's a pushed branch plus a merge button. The fork → push → review → merge flow, and what <i>merge-commit</i> vs <i>squash</i> vs <i>rebase</i> each do to history.</p>
+      <div class="hard"><b>Why it's hard:</b> it feels like a git feature but it's a forge layer; the three merge buttons silently produce three different histories.</div>
+      <div class="tags"><span class="tag">not a git command</span><span class="tag">3 merge buttons</span><span class="tag">fork &amp; upstream</span></div>
+    </a>
+
+    <a class="card" href="tags.html">
+      <div class="num">13</div>
+      <h3>Tags &amp; releases<span class="arrow">→</span></h3>
+      <p class="desc">A tag is a pointer that <i>doesn't</i> move when you commit — the fixed handle you put on a release. Lightweight vs annotated, why tags don't push by default, and the detached-HEAD checkout.</p>
+      <div class="hard"><b>Why it's hard:</b> it looks like a branch but is nailed in place, and tags silently don't travel with a normal <code class="c">git push</code>.</div>
+      <div class="tags"><span class="tag">doesn't move</span><span class="tag">annotated vs lightweight</span><span class="tag">v1.2.3</span></div>
+    </a>
+
+    <a class="card" href="staging.html">
+      <div class="num">14</div>
+      <h3>The staging area<span class="arrow">→</span></h3>
+      <p class="desc">The index is a complete, editable <i>draft of your next commit</i> — not a list of filenames. Covers <code class="c">git add -p</code>, the two columns of <code class="c">git status</code>, and the two diffs.</p>
+      <div class="hard"><b>Why it's hard:</b> <code class="c">add</code> copies content <i>now</i>, not "later" — so the same file lands in both columns, and there are two diffs for two different gaps.</div>
+      <div class="tags"><span class="tag">the index</span><span class="tag">git add -p</span><span class="tag">staged vs unstaged</span></div>
     </a>
 
   </div>

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remotes — git, deeply</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- small extras reusing the design language ---- */
+  .filecard{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0;line-height:1.7;overflow-x:auto;white-space:pre}
+  .filecard .path{color:var(--accent)}
+  .filecard .val{color:var(--purple)}
+  .filecard .cmt{color:var(--muted)}
+  table.reftable{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  table.reftable th,table.reftable td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+  table.reftable th{background:var(--panel-2);color:var(--text);font-weight:600}
+  table.reftable td{color:var(--muted)}
+  table.reftable code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Remotes: <span class="dot">origin/main is a cache, not the server</span></h1>
+  <p class="sub">Git is <i>distributed</i> — every clone is a complete repository. A "remote" is just a nickname for another copy, and pointers like <code class="c">origin/main</code> are your <b>local memory</b> of where that copy was the last time you spoke to it. Almost every push/pull confusion comes from forgetting that.</p>
+
+  <p class="lead">When you <code class="c">clone</code>, you get the whole history <i>plus</i> a set of read-only pointers — <b>remote-tracking branches</b> — recording the server's state as of your last contact. They do not update by magic. <code class="c">fetch</code>, <code class="c">pull</code>, and <code class="c">push</code> are the three commands that move commits (and these pointers) across the gap.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> history both sides share</span>
+    <span><span class="dot-l new"></span> commits only you have (ahead)</span>
+    <span><span class="dot-l feat"></span> commits only the remote has (behind)</span>
+  </div>
+
+  <h2>1 · A remote is just a named URL</h2>
+  <p>A remote stores nothing on its own — it's a name bound to a URL. <code class="c">origin</code> is the default nickname your clone gives the place it came from. You can add as many as you like.</p>
+
+  <div class="filecard"><span class="cmt"># git remote -v</span>
+origin    https://github.com/you/project.git (fetch)
+origin    https://github.com/you/project.git (push)
+<span class="cmt"># add others: a teammate's repo, your fork, a deploy target…</span>
+git remote add upstream https://github.com/org/project.git</div>
+
+  <p>What makes a remote <i>useful</i> is the set of pointers git keeps for it under <code class="c">refs/remotes/origin/</code> — one per branch on the server. Those are the remote-tracking branches.</p>
+
+  <h2>2 · <code class="c">origin/main</code> is a cached pointer</h2>
+  <p>Step through a normal day: you commit, a teammate pushes, you fetch, you reconcile, you push. Watch which pointers move on each command — and notice that <code class="c">fetch</code> moves <i>only</i> <code class="c">origin/main</code> and never touches your work.</p>
+
+  <div class="scene" id="scene-remote"></div>
+
+  <div class="callout">
+    <b>The one idea to keep.</b> <code class="c">origin/main</code> is <i>not</i> the server's branch — it's a read-only bookmark inside <i>your</i> repo saying "this is where origin's main was the last time I synced." It moves only when you run <code class="c">fetch</code> (or <code class="c">push</code>). Between syncs it goes stale, and that staleness is exactly what "behind" counts.
+  </div>
+
+  <h2>3 · fetch vs pull vs push</h2>
+  <table class="reftable">
+    <tr><th>Command</th><th>Direction</th><th>What it changes</th><th>Touches your files?</th></tr>
+    <tr><td><code class="c">git fetch</code></td><td>Download</td><td>Updates remote-tracking branches (<code class="c">origin/*</code>) only</td><td><b>No</b> — working tree and your branches untouched</td></tr>
+    <tr><td><code class="c">git pull</code></td><td>Download + integrate</td><td><code class="c">fetch</code>, then <code class="c">merge</code> (or <code class="c">rebase</code>) into your current branch</td><td><b>Yes</b> — advances your branch and updates files</td></tr>
+    <tr><td><code class="c">git push</code></td><td>Upload</td><td>Sends your commits to the remote; advances <code class="c">origin/*</code> on success</td><td>No locally; updates the server</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <b><code class="c">pull</code> is two commands in a trench coat.</b> <code class="c">git pull</code> = <code class="c">git fetch</code> then <code class="c">git merge origin/main</code> into your branch. That hidden merge is why a pull can suddenly mint a merge commit or drop you into a conflict. Prefer <code class="c">git pull --rebase</code> to replay your commits on top (linear history), or look before you leap: <code class="c">git fetch</code>, then <code class="c">git log main..origin/main</code> to see what's incoming.
+  </div>
+
+  <h2>4 · Tracking: how a bare <code class="c">push</code> knows where to go</h2>
+  <p>A local branch can be linked to a remote-tracking branch — its <b>upstream</b>. Once set, <code class="c">git push</code> and <code class="c">git pull</code> need no arguments, and <code class="c">git status</code> can report "ahead / behind" by comparing the two.</p>
+
+  <div class="filecard"><span class="cmt"># first push of a new branch — set the upstream once with -u</span>
+git push <span class="path">-u</span> origin feature
+<span class="cmt"># now bare commands know the target, and status can count divergence:</span>
+git status        <span class="cmt"># "Your branch is ahead of 'origin/feature' by 2 commits."</span>
+git branch -vv    <span class="cmt"># every local branch + the remote-tracking branch it follows</span></div>
+
+  <p><b>Ahead</b> is the number of commits you have that the remote-tracking branch doesn't; <b>behind</b> is the reverse. Both are measured against your possibly-stale <code class="c">origin/*</code> pointer — so a <code class="c">git fetch</code> first gives you an honest count.</p>
+
+  <div class="callout">
+    <b>See also.</b> A <code class="c">pull</code> that diverges resolves with a <a href="merge.html">merge</a> or a <a href="rebase.html">rebase</a> — both linked pages show exactly what happens to your commits. Remote-tracking branches are ordinary <a href="head-refs.html">refs</a>, just kept under <code class="c">refs/remotes/</code>. And once you've pushed a branch, opening a <a href="pull-requests.html">pull request</a> is the next step.
+  </div>
+
+  <footer>
+    Part of the <a href="index.html">git concepts</a> set · <a href="../git-guide.html">cheatsheet &amp; quiz</a> · self-contained, no network required
+  </footer>
+</div>
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git merge feature"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]   // merge commit = TWO parent edges
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+
+/* ---------------- Scene: remote-tracking branches in motion ---------------- */
+makeScene(document.getElementById('scene-remote'), [
+  {
+    narration:'Fresh sync. <b>main</b> (where you are) and <b>origin/main</b> (your cached view of the server) sit on the same commit <b>C</b>. Nothing to push, nothing to pull.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'origin/main',at:'C',kind:'branch'}]
+  },
+  {
+    command:'git commit',
+    narration:'You commit <b>D</b> locally. <b>main</b> advances — but <b>origin/main</b> does <i>not</i>; the server hasn\'t heard from you. Git now reports <b>ahead 1</b>.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:3,row:1,kind:'new',label:'D'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'},{name:'origin/main',at:'C',kind:'branch'}]
+  },
+  {
+    command:'git fetch',
+    narration:'Meanwhile a teammate pushed <b>E</b>. <code class="c">fetch</code> downloads it and moves <b>origin/main</b> to E — but leaves your <b>main</b> and your files exactly as they were. The branches have diverged: <b>ahead 1, behind 1</b>.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:3,row:1,kind:'new',label:'D'},{id:'E',col:3,row:0,kind:'feat',label:'E'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','C']],
+    refs:[{name:'main',at:'D',kind:'head'},{name:'origin/main',at:'E',kind:'branch'}]
+  },
+  {
+    command:'git merge origin/main',
+    narration:'Reconcile — this is the second half of a <code class="c">pull</code>. Merging <b>origin/main</b> into your branch creates merge commit <b>M</b> tying D and E together, and <b>main</b> moves to M. (<code class="c">pull --rebase</code> would instead replay D on top of E, no merge node.)',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:3,row:1,kind:'base',label:'D'},{id:'E',col:3,row:0,kind:'feat',label:'E'},
+      {id:'M',col:4,row:1,kind:'new',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','C'],['M','D'],['M','E']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'origin/main',at:'E',kind:'branch'}]
+  },
+  {
+    command:'git push',
+    narration:'Your history now contains the server\'s, so the push is accepted. The server fast-forwards and <b>origin/main</b> catches up to <b>M</b>. In sync again — <b>up to date</b>.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:3,row:1,kind:'base',label:'D'},{id:'E',col:3,row:0,kind:'base',label:'E'},
+      {id:'M',col:4,row:1,kind:'base',label:'M'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','C'],['M','D'],['M','E']],
+    refs:[{name:'main',at:'M',kind:'head'},{name:'origin/main',at:'M',kind:'branch'}]
+  }
+]);
+
+</script>
+</body>
+</html>

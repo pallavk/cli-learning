@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pull requests — git, deeply</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- small extras reusing the design language ---- */
+  .filecard{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0;line-height:1.7;overflow-x:auto;white-space:pre}
+  .filecard .path{color:var(--accent)}
+  .filecard .val{color:var(--purple)}
+  .filecard .cmt{color:var(--muted)}
+  table.reftable{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  table.reftable th,table.reftable td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+  table.reftable th{background:var(--panel-2);color:var(--text);font-weight:600}
+  table.reftable td{color:var(--muted)}
+  table.reftable code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Pull requests: <span class="dot">proposing changes across a boundary</span></h1>
+  <p class="sub">A pull request isn't a git command — git has no <code class="c">git pull-request</code>. It's a feature the <i>forge</i> (GitHub, GitLab, Bitbucket) adds on top: a page that compares two branches, runs CI, collects review, and offers a merge button. Underneath, it's pure git — a branch you pushed, waiting to be merged.</p>
+
+  <p class="lead">The whole flow is: branch → commit → <b>push the branch to a remote</b> → open a PR → review → click <b>merge</b>. The only part that's new versus everything else in this set is that last button — and which of its <i>three</i> forms you pick decides what your history looks like forever.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> the base branch (main)</span>
+    <span><span class="dot-l new"></span> your feature commits</span>
+    <span><span class="dot-l feat"></span> the integration commit</span>
+    <span><span class="dot-l ghost"></span> originals left behind by a rewrite</span>
+  </div>
+
+  <h2>1 · What a PR actually is</h2>
+  <div class="callout">
+    <b>A pull request is a forge feature, not a git one.</b> When you push a branch, the server now has two branches that differ. The forge notices, and offers to open a <i>request</i>: "please pull my branch's commits into yours." That request page bundles the diff, a discussion thread, CI status, and approvals. Accept it and the forge runs an ordinary git merge on its side. Git itself never knew a "PR" existed.
+  </div>
+  <p>Because it's just a pushed branch plus a merge, everything you already know about <a href="remotes.html">remotes</a>, <a href="merge.html">merge</a>, and <a href="rebase.html">rebase</a> applies directly.</p>
+
+  <h2>2 · The lifecycle</h2>
+  <p>You branch off main, make your commits, and push the branch. Pushing doesn't merge anything — it just puts your branch on the server so the forge can compare it and show a <b>“Compare &amp; pull request”</b> button.</p>
+
+  <div class="scene" id="scene-pr"></div>
+
+  <p>Now reviewers comment, CI runs, you push fixes (the PR updates automatically — it tracks the branch). When everyone's happy, someone clicks merge. That's where the three forms diverge.</p>
+
+  <h2>3 · The three merge buttons</h2>
+  <p>Same PR, three very different results in <code class="c">main</code>'s history. Each mini-diagram shows main after merging the two-commit feature branch <b>X → Y</b>.</p>
+
+  <div class="compare">
+    <div>
+      <div class="scene" id="scene-merge-btn"></div>
+      <p class="muted" style="font-size:13px;text-align:center;margin:4px 0 0">Merge commit — keep everything, add <b>M</b></p>
+    </div>
+    <div>
+      <div class="scene" id="scene-squash-btn"></div>
+      <p class="muted" style="font-size:13px;text-align:center;margin:4px 0 0">Squash — X and Y collapse into one new <b>S</b></p>
+    </div>
+  </div>
+  <div class="compare" style="margin-top:14px">
+    <div>
+      <div class="scene" id="scene-rebase-btn"></div>
+      <p class="muted" style="font-size:13px;text-align:center;margin:4px 0 0">Rebase — replay as <b>X′, Y′</b>, no merge node</p>
+    </div>
+    <div style="display:flex;align-items:center">
+      <table class="reftable" style="margin:0">
+        <tr><th>Button</th><th>History</th><th>Your commits</th></tr>
+        <tr><td><b>Merge commit</b></td><td>Non-linear, keeps a merge node</td><td>All preserved + a merge commit</td></tr>
+        <tr><td><b>Squash &amp; merge</b></td><td>Linear</td><td>Collapsed into one new commit</td></tr>
+        <tr><td><b>Rebase &amp; merge</b></td><td>Linear</td><td>Each preserved, but rewritten (new hashes)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <p><b>Which to pick?</b> <b>Squash</b> is the common default — one tidy commit per PR, messy work-in-progress commits forgotten. <b>Merge commit</b> keeps the literal truth of how work happened (good for long-lived feature branches). <b>Rebase</b> gives a linear history that still preserves your individual commits — at the cost of rewriting their hashes.</p>
+
+  <div class="callout warn">
+    <b>After a squash or rebase merge, your local branch is a trap.</b> The commits now on main have <i>different hashes</i> than the ones on your local feature branch — git no longer sees them as the same commits. Don't keep building on the old branch: delete it, then <code class="c">git switch main &amp;&amp; git pull</code> and branch fresh. Reusing a squash-merged branch is the number-one way people accidentally resurrect already-merged changes.
+  </div>
+
+  <h2>4 · The fork model</h2>
+  <p>When you can't push to a project directly (most open source), you <b>fork</b> it — a server-side copy you own — and PR from there. The convention is two remotes: <code class="c">origin</code> (your fork, you push here) and <code class="c">upstream</code> (the original, you PR against it).</p>
+
+  <div class="filecard">git clone https://github.com/<span class="path">you</span>/project.git      <span class="cmt"># origin = your fork</span>
+git remote add upstream https://github.com/<span class="path">org</span>/project.git
+git fetch upstream
+git switch -c feature upstream/main      <span class="cmt"># branch off the real main</span>
+<span class="cmt"># …work, then push the branch to YOUR fork…</span>
+git push -u origin feature               <span class="cmt"># now open the PR against upstream/main</span>
+<span class="cmt"># keep your branch current as upstream moves:</span>
+git fetch upstream &amp;&amp; git rebase upstream/main</div>
+
+  <div class="callout">
+    <b>See also.</b> Pushing the branch is plain <a href="remotes.html">remotes</a> work; the merge button runs the same <a href="merge.html">merge</a> or <a href="rebase.html">rebase</a> these pages animate. If a PR goes wrong after merge, <a href="revert.html">revert</a> (not reset) is the safe undo on a shared branch.
+  </div>
+
+  <footer>
+    Part of the <a href="index.html">git concepts</a> set · <a href="../git-guide.html">cheatsheet &amp; quiz</a> · self-contained, no network required
+  </footer>
+</div>
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git merge feature"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]   // merge commit = TWO parent edges
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+
+/* ---------------- Scene: PR lifecycle ---------------- */
+makeScene(document.getElementById('scene-pr'), [
+  {
+    narration:'You branch <b>feature</b> off main at <b>C</b> and make two commits, <b>X</b> and <b>Y</b>. So far this is entirely local.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'X',col:3,row:0,kind:'new',label:'X'},{id:'Y',col:4,row:0,kind:'new',label:'Y'}
+    ],
+    edges:[['B','A'],['C','B'],['X','C'],['Y','X']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'Y',kind:'head'}]
+  },
+  {
+    command:'git push -u origin feature',
+    narration:'You push the branch to the remote. Nothing merges — <code class="c">origin/feature</code> just mirrors your branch on the server. The forge spots a branch ahead of main and surfaces a <b>“Compare &amp; pull request”</b> button. Opening the PR is a request, not a merge.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'X',col:3,row:0,kind:'new',label:'X'},{id:'Y',col:4,row:0,kind:'new',label:'Y'}
+    ],
+    edges:[['B','A'],['C','B'],['X','C'],['Y','X']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'Y',kind:'head'},{name:'origin/feature',at:'Y',kind:'branch'}]
+  }
+]);
+
+/* ---------------- Static: the three merge buttons ---------------- */
+makeScene(document.getElementById('scene-merge-btn'), [{
+  commits:[
+    {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+    {id:'X',col:3,row:0,kind:'new',label:'X'},{id:'Y',col:4,row:0,kind:'new',label:'Y'},
+    {id:'M',col:5,row:1,kind:'feat',label:'M'}
+  ],
+  edges:[['B','A'],['C','B'],['X','C'],['Y','X'],['M','C'],['M','Y']],
+  refs:[{name:'main',at:'M',kind:'branch'}]
+}], {static:true, colw:78});
+
+makeScene(document.getElementById('scene-squash-btn'), [{
+  commits:[
+    {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+    {id:'X',col:3,row:0,kind:'ghost',label:'X'},{id:'Y',col:4,row:0,kind:'ghost',label:'Y'},
+    {id:'S',col:3,row:1,kind:'feat',label:'S'}
+  ],
+  edges:[['B','A'],['C','B'],['X','C'],['Y','X'],['S','C']],
+  refs:[{name:'main',at:'S',kind:'branch'}]
+}], {static:true, colw:78});
+
+makeScene(document.getElementById('scene-rebase-btn'), [{
+  commits:[
+    {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+    {id:'X',col:3,row:0,kind:'ghost',label:'X'},{id:'Y',col:4,row:0,kind:'ghost',label:'Y'},
+    {id:'X2',col:3,row:1,kind:'feat',label:'X′'},{id:'Y2',col:4,row:1,kind:'feat',label:'Y′'}
+  ],
+  edges:[['B','A'],['C','B'],['X','C'],['Y','X'],['X2','C'],['Y2','X2']],
+  refs:[{name:'main',at:'Y2',kind:'branch'}]
+}], {static:true, colw:78});
+
+</script>
+</body>
+</html>

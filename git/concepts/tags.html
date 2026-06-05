@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tags __TITLE__amp; releases — git, deeply</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- small extras reusing the design language ---- */
+  .filecard{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0;line-height:1.7;overflow-x:auto;white-space:pre}
+  .filecard .path{color:var(--accent)}
+  .filecard .val{color:var(--purple)}
+  .filecard .cmt{color:var(--muted)}
+  table.reftable{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  table.reftable th,table.reftable td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+  table.reftable th{background:var(--panel-2);color:var(--text);font-weight:600}
+  table.reftable td{color:var(--muted)}
+  table.reftable code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Tags: <span class="dot">permanent names for a commit</span></h1>
+  <p class="sub">A branch is a pointer that <i>moves</i> as you commit. A tag is a pointer that <b>doesn't</b> — you nail it to one commit and it stays there forever. That single difference is what makes tags the right tool for marking releases.</p>
+
+  <p class="lead">When you ship <code class="c">v1.0.0</code>, you want a name that will <i>always</i> mean exactly the bytes you released — not "wherever main happens to be now." Tags give you that fixed handle. There are two kinds (lightweight and annotated), they don't travel with a normal push, and checking one out lands you in detached HEAD.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> commits</span>
+    <span><span class="dot-l new"></span> the newest commit</span>
+    <span>the purple pill is a <b>tag</b></span>
+  </div>
+
+  <h2>1 · Lightweight vs annotated</h2>
+  <p>A <b>lightweight</b> tag is just a name pointing at a commit — like a branch that never moves. An <b>annotated</b> tag is a real object in git's database with its own author, date, message, and optional GPG signature. Use annotated for anything you publish.</p>
+
+  <div class="filecard">git tag v1.0.0                      <span class="cmt"># lightweight: just a name → commit</span>
+git tag <span class="path">-a</span> v1.0.0 -m "Release 1.0"  <span class="cmt"># annotated: object w/ tagger, date, message</span>
+git tag <span class="path">-s</span> v1.0.0 -m "Release 1.0"  <span class="cmt"># signed (GPG) annotated tag</span>
+git tag v0.9 9fceb02                 <span class="cmt"># tag an OLD commit by hash, after the fact</span>
+git show v1.0.0                      <span class="cmt"># annotated tags carry their own metadata</span></div>
+
+  <table class="reftable">
+    <tr><th>Aspect</th><th>Lightweight</th><th>Annotated</th></tr>
+    <tr><td>Stored as</td><td>A ref pointing at a commit (no object)</td><td>A full tag object in the database</td></tr>
+    <tr><td>Carries</td><td>Nothing but the name</td><td>Tagger, date, message, optional signature</td></tr>
+    <tr><td>Use for</td><td>Private, temporary bookmarks</td><td><b>Releases</b> — anything you publish or sign</td></tr>
+  </table>
+
+  <h2>2 · A tag doesn't move</h2>
+  <p>This is the whole idea. Tag a commit, then keep working and watch <code class="c">main</code> march on while the tag stays exactly where you put it.</p>
+
+  <div class="scene" id="scene-tag"></div>
+
+  <div class="callout">
+    <b>Branch = verb, tag = noun.</b> A branch answers "where is work happening?" and moves with every commit. A tag answers "what did we call this exact point?" and never moves on its own. That's why you <i>build on</i> branches but <i>reference</i> tags.
+  </div>
+
+  <h2>3 · Tags don't ride along with <code class="c">push</code></h2>
+  <p>A plain <code class="c">git push</code> sends commits and branch updates — <b>not</b> tags. You push tags explicitly, which surprises people the first time a teammate can't see <code class="c">v1.0.0</code>.</p>
+
+  <div class="filecard">git push origin v1.0.0          <span class="cmt"># push one specific tag</span>
+git push origin --tags          <span class="cmt"># push all local tags</span>
+git tag -d v1.0.0               <span class="cmt"># delete the tag locally</span>
+git push origin --delete v1.0.0 <span class="cmt"># delete it on the remote too</span></div>
+
+  <h2>4 · Checking out a tag = detached HEAD</h2>
+  <p>A tag isn't a branch, so there's nothing for HEAD to follow. Check one out and you land in <a href="head-refs.html">detached HEAD</a> — fine for inspecting or building a release, but make a branch before you commit, or your work will be hard to find.</p>
+
+  <div class="scene" id="scene-tagco"></div>
+
+  <table class="reftable">
+    <tr><th></th><th>Tag</th><th>Branch</th></tr>
+    <tr><td>Moves when you commit?</td><td><b>No</b> — fixed forever</td><td>Yes — follows your work</td></tr>
+    <tr><td>Checking it out</td><td>Detached HEAD</td><td>Normal; HEAD follows along</td></tr>
+    <tr><td>Purpose</td><td>Mark a fixed point (a release)</td><td>Track ongoing work</td></tr>
+  </table>
+
+  <div class="callout">
+    <b>Releases build on tags.</b> Semantic versioning names tags <code class="c">v&lt;major&gt;.&lt;minor&gt;.&lt;patch&gt;</code> (e.g. <code class="c">v2.4.1</code>). Most forges turn an annotated tag into a "Release" page, and CI systems commonly trigger a publish/deploy when you push a tag matching <code class="c">v*</code>. The tag is the anchor the whole release process hangs off.
+  </div>
+
+  <div class="callout">
+    <b>See also.</b> Tags are ordinary <a href="head-refs.html">refs</a> kept under <code class="c">refs/tags/</code>, and they're how you'd label the merge commit a <a href="pull-requests.html">pull request</a> produced before shipping it.
+  </div>
+
+  <footer>
+    Part of the <a href="index.html">git concepts</a> set · <a href="../git-guide.html">cheatsheet &amp; quiz</a> · self-contained, no network required
+  </footer>
+</div>
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git merge feature"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]   // merge commit = TWO parent edges
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+
+/* ---------------- Scene: a tag doesn't move ---------------- */
+makeScene(document.getElementById('scene-tag'), [
+  {
+    narration:'Release time. You tag commit <b>C</b> as <b>v1.0.0</b>. Right now both <b>main</b> and the tag point at C — they look identical.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'v1.0.0',at:'C',kind:'tag'}]
+  },
+  {
+    command:'git commit',
+    narration:'You keep working — commit <b>D</b>. <b>main</b> advances; <b>v1.0.0</b> does <i>not budge</i>. The tag is nailed to C.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:3,row:0,kind:'new',label:'D'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C']],
+    refs:[{name:'main',at:'D',kind:'head'},{name:'v1.0.0',at:'C',kind:'tag'}]
+  },
+  {
+    command:'git commit',
+    narration:'Another commit, <b>E</b>. <b>main</b> is now two ahead — yet <b>v1.0.0</b> still means exactly the bytes you shipped at C, and always will. That permanence is the entire job of a tag.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:3,row:0,kind:'base',label:'D'},{id:'E',col:4,row:0,kind:'new',label:'E'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','D']],
+    refs:[{name:'main',at:'E',kind:'head'},{name:'v1.0.0',at:'C',kind:'tag'}]
+  }
+]);
+
+/* ---------------- Scene: checkout a tag = detached HEAD ---------------- */
+makeScene(document.getElementById('scene-tagco'), [
+  {
+    narration:'<b>main</b> is at E; <b>v1.0.0</b> still marks C. You want to inspect the released code.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'base'},
+      {id:'D',col:3,row:0,kind:'base',label:'D'},{id:'E',col:4,row:0,kind:'base',label:'E'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','D']],
+    refs:[{name:'main',at:'E',kind:'branch'},{name:'v1.0.0',at:'C',kind:'tag'}]
+  },
+  {
+    command:'git checkout v1.0.0',
+    narration:'A tag is no branch, so HEAD has nothing to follow — it attaches <i>directly</i> to commit C. You\'re in <b>detached HEAD</b>: great for inspecting or building the release, but commit here and you\'ll need a branch to keep it.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'new',label:'C'},
+      {id:'D',col:3,row:0,kind:'base',label:'D'},{id:'E',col:4,row:0,kind:'base',label:'E'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','D']],
+    refs:[{name:'main',at:'E',kind:'branch'},{name:'v1.0.0',at:'C',kind:'tag'},{name:'HEAD',at:'C',kind:'head'}]
+  }
+]);
+
+</script>
+</body>
+</html>

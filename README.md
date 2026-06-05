@@ -39,6 +39,10 @@ commit-graph engine that animates branch pointers and edges as you step through 
 | 08 | [Revert: undo by moving forward](git/concepts/revert.html) | Append the inverse commit; revert vs reset; the `-m` merge gotcha |
 | 09 | [Stash: work parked as commits](git/concepts/stash.html) | A stash entry is a commit with two parents; the stash stack; pop vs apply vs drop |
 | 10 | [Bisect: binary-search a bug](git/concepts/bisect.html) | Find a regression in log₂(N) tests; `git bisect run` automation |
+| 11 | [Remotes & tracking branches](git/concepts/remotes.html) | `origin/main` is a cached pointer, not the server; fetch vs pull vs push; ahead/behind |
+| 12 | [Pull requests](git/concepts/pull-requests.html) | A PR is a pushed branch + a merge button; merge-commit vs squash vs rebase; the fork model |
+| 13 | [Tags & releases](git/concepts/tags.html) | A tag doesn't move when you commit; lightweight vs annotated; pushing tags; detached-HEAD checkout |
+| 14 | [The staging area](git/concepts/staging.html) | The index as the commit you're composing; `git add -p`; the two columns; staged vs unstaged diffs |
 
 ## Layout
 
