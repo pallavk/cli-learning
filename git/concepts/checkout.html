@@ -114,10 +114,14 @@
   <div class="filecard"><span class="cmt"># one command, several unrelated jobs:</span>
 git checkout main            <span class="cmt"># 1. switch to a branch          → moves HEAD</span>
 git checkout -b feature      <span class="cmt"># 2. create a branch + switch    → moves HEAD</span>
-git checkout a1b2c3d         <span class="cmt"># 3. detach onto a commit/tag    → moves HEAD</span>
+git checkout a1b2c3d         <span class="cmt"># 3. land on a bare commit/tag   → moves HEAD</span>
 git checkout -- file.txt     <span class="cmt"># 4. discard edits to a file     → rewrites your file!</span></div>
 
   <p>Jobs 1–3 relocate a <i>pointer</i> (HEAD) and leave your committed work alone. Job 4 reaches into your <i>working tree</i> and overwrites a file — and never moves HEAD at all.</p>
+
+  <div class="callout">
+    <b>One term to pin down first: a <i>detached HEAD</i> (that's job #3).</b> Normally HEAD points at a <i>branch name</i>, and the branch points at a commit — when you commit, the branch moves forward and HEAD rides along with it. But when you check out a bare commit or a tag, HEAD points <i>straight at that commit</i> with no branch in between. That's "detached": you're parked on a commit, not on any branch. It isn't an error — it's just that any new commits you make there belong to no branch, so they're easy to lose once you leave. We'll use the word a few more times below; the full picture is on the <a href="head-refs.html">HEAD &amp; refs</a> page.
+  </div>
 
   <h2>2 · The split (git 2.23, 2019)</h2>
   <div class="callout warn">
@@ -139,7 +143,7 @@ git switch -c feature        <span class="cmt"># create + switch           (was:
 git switch -                 <span class="cmt"># jump back to the previous branch</span>
 git switch --detach v1.0.0   <span class="cmt"># intentionally detach onto a commit/tag</span></div>
 
-  <p>That last one is the honest version of job #3: detaching is now something you <i>ask for</i> by name, instead of stumbling into it. (What detached HEAD <i>is</i> lives on the <a href="head-refs.html">HEAD &amp; refs</a> page.)</p>
+  <p>That last one is the honest version of job #3: landing in a detached HEAD (defined above) is now something you <i>ask for</i> by name with <code class="c">--detach</code>, instead of stumbling into it the moment you happen to check out a commit.</p>
 
   <h2>4 · <code class="c">restore</code> — change file contents</h2>
   <p>Restoring rewrites files to match some source — the index, HEAD, or any commit — and leaves HEAD and every branch exactly where they are. To prove it: the graph below does <b>not move</b> when you restore. Only your files do.</p>
