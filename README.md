@@ -43,6 +43,7 @@ commit-graph engine that animates branch pointers and edges as you step through 
 | 12 | [Pull requests](git/concepts/pull-requests.html) | A PR is a pushed branch + a merge button; merge-commit vs squash vs rebase; the fork model |
 | 13 | [Tags & releases](git/concepts/tags.html) | A tag doesn't move when you commit; lightweight vs annotated; pushing tags; detached-HEAD checkout |
 | 14 | [The staging area](git/concepts/staging.html) | The index as the commit you're composing; `git add -p`; the two columns; staged vs unstaged diffs |
+| 15 | [Checkout, switch & restore](git/concepts/checkout.html) | Why one overloaded command split into `switch` (moves HEAD) and `restore` (changes files); full translation table |
 
 ## Layout
 
@@ -51,7 +52,7 @@ learning/
 ├── awk/   bash/   sed/   tmux/   vim/      # <tool>-guide.html + questions.js
 └── git/
     ├── git-guide.html
-    └── concepts/                            # "Git, deeply" — 10 explainers + index.html
+    └── concepts/                            # "Git, deeply" — 15 explainers + index.html
 ```
 
 Each tool folder holds its `*-guide.html` page and a `questions.js` powering its quiz.

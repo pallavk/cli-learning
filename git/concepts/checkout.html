@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout, switch &amp; restore — git, deeply</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.feat{border-color:var(--feat);background:#3a2e22}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  /* ---- commit-graph engine ---- */
+  .scene{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin:20px 0}
+  .stage{position:relative;margin:6px auto 4px;min-height:200px;transition:height .4s ease,width .4s ease}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .node{position:absolute;width:46px;height:46px;border-radius:50%;border:2px solid var(--base);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;
+    z-index:2;transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease,border-color .3s,background .3s;background:#2b3a44;color:#cfe3ee}
+  .node.base{border-color:var(--base);background:#26343d;color:#cfe3ee}
+  .node.feat{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  .node.new{border-color:var(--new);background:#1f352b;color:#a6ecca;box-shadow:0 0 0 4px rgba(111,224,171,.12)}
+  .node.ghost{border-color:var(--ghost);background:transparent;color:#6f7178;border-style:dashed;opacity:.5}
+  .ref{position:absolute;z-index:3;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    transition:left .42s cubic-bezier(.4,.05,.2,1),top .42s cubic-bezier(.4,.05,.2,1),opacity .35s ease;transform:translateX(-50%)}
+  .ref.branch{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent)}
+  .ref.head{background:var(--accent);border:1px solid var(--accent);color:#11201c}
+  .ref.tag{background:rgba(196,165,240,.16);border:1px solid var(--purple);color:var(--purple)}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .pick{color:var(--base)} .todo .squash{color:var(--feat)} .todo .cmt{color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.compare{grid-template-columns:1fr}.counter{margin-left:0}}
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- small extras reusing the design language ---- */
+  .filecard{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0;line-height:1.7;overflow-x:auto;white-space:pre}
+  .filecard .path{color:var(--accent)}
+  .filecard .val{color:var(--purple)}
+  .filecard .cmt{color:var(--muted)}
+  table.reftable{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  table.reftable th,table.reftable td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+  table.reftable th{background:var(--panel-2);color:var(--text);font-weight:600}
+  table.reftable td{color:var(--muted)}
+  table.reftable code.c{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Checkout, switch &amp; restore: <span class="dot">one command that did too much</span></h1>
+  <p class="sub"><code class="c">git checkout</code> is the most overloaded command in git: for years one verb did several <i>unrelated</i> jobs — some that move <b>where you are</b>, one that <b>overwrites your files</b>. That collision is why <code class="c">checkout</code> has scared people into losing work. In 2019 git split it into <code class="c">switch</code> and <code class="c">restore</code>; this page shows why, and when to reach for which.</p>
+
+  <p class="lead">The key insight: moving a pointer and rewriting a file are <i>opposite</i> operations that happened to share a keyword. Once you separate "change where I am" from "change what my files contain," every form of <code class="c">checkout</code> falls into one of two clear buckets — and the modern commands name the bucket for you.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> commits</span>
+    <span><span class="dot-l new"></span> the commit you're on now</span>
+    <span>the teal pill is <b>HEAD</b> — where you are</span>
+  </div>
+
+  <h2>1 · The overload: four jobs, one word</h2>
+  <p>Classic <code class="c">git checkout</code> answered to all of these. Look at the last one — it's nothing like the others.</p>
+
+  <div class="filecard"><span class="cmt"># one command, several unrelated jobs:</span>
+git checkout main            <span class="cmt"># 1. switch to a branch          → moves HEAD</span>
+git checkout -b feature      <span class="cmt"># 2. create a branch + switch    → moves HEAD</span>
+git checkout a1b2c3d         <span class="cmt"># 3. detach onto a commit/tag    → moves HEAD</span>
+git checkout -- file.txt     <span class="cmt"># 4. discard edits to a file     → rewrites your file!</span></div>
+
+  <p>Jobs 1–3 relocate a <i>pointer</i> (HEAD) and leave your committed work alone. Job 4 reaches into your <i>working tree</i> and overwrites a file — and never moves HEAD at all.</p>
+
+  <h2>2 · The split (git 2.23, 2019)</h2>
+  <div class="callout warn">
+    <b>Two opposite operations, one keyword — a famous footgun.</b> Because <code class="c">git checkout -- file</code> shared a name with "switch branch," a stray branch-name clash or a mistyped path could silently throw away edits that exist in no commit. Git's fix was to split the command by <i>intent</i>: <code class="c">git switch</code> only ever moves HEAD; <code class="c">git restore</code> only ever changes file contents. The verb now tells you which bucket you're in.
+  </div>
+  <table class="reftable">
+    <tr><th>Command</th><th>Only ever touches…</th><th>Mental model</th></tr>
+    <tr><td><code class="c">git switch</code></td><td>HEAD / branches (where you are)</td><td>"Take me somewhere else"</td></tr>
+    <tr><td><code class="c">git restore</code></td><td>File contents (working tree / index)</td><td>"Make these files look like &lt;X&gt;"</td></tr>
+  </table>
+
+  <h2>3 · <code class="c">switch</code> — move where you are</h2>
+  <p>Switching moves HEAD to another branch and updates your working tree to match that branch's commit. Nothing in history changes — you've just relocated. Watch the teal <b>HEAD</b> pill travel.</p>
+
+  <div class="scene" id="scene-switch"></div>
+
+  <div class="filecard">git switch main              <span class="cmt"># go to an existing branch  (was: checkout main)</span>
+git switch -c feature        <span class="cmt"># create + switch           (was: checkout -b)</span>
+git switch -                 <span class="cmt"># jump back to the previous branch</span>
+git switch --detach v1.0.0   <span class="cmt"># intentionally detach onto a commit/tag</span></div>
+
+  <p>That last one is the honest version of job #3: detaching is now something you <i>ask for</i> by name, instead of stumbling into it. (What detached HEAD <i>is</i> lives on the <a href="head-refs.html">HEAD &amp; refs</a> page.)</p>
+
+  <h2>4 · <code class="c">restore</code> — change file contents</h2>
+  <p>Restoring rewrites files to match some source — the index, HEAD, or any commit — and leaves HEAD and every branch exactly where they are. To prove it: the graph below does <b>not move</b> when you restore. Only your files do.</p>
+
+  <div class="scene" id="scene-restore"></div>
+
+  <div class="filecard">git restore file.txt                  <span class="cmt"># discard unstaged edits   (working tree ← index)</span>
+git restore --staged file.txt         <span class="cmt"># unstage, keep the edits  (index ← HEAD)</span>
+git restore --source=HEAD~2 app.py    <span class="cmt"># pull ONE file from an older commit</span>
+git restore --staged --worktree .     <span class="cmt"># blow away ALL local changes — careful</span></div>
+
+  <div class="callout warn">
+    <b>restore is the one with no undo.</b> Discarding working-tree edits throws away changes that live in <i>no</i> commit — so the <a href="reflog.html">reflog</a> can't bring them back, unlike a bad <code class="c">switch</code> or <code class="c">reset</code> (which only move pointers the reflog records). Treat <code class="c">git restore file</code> like <code class="c">rm</code> on your uncommitted work.
+  </div>
+
+  <h2>5 · The translation table</h2>
+  <p>Everything <code class="c">checkout</code> did, in its modern, intention-revealing form. <code class="c">checkout</code> still works and isn't deprecated — but new docs increasingly use the split commands.</p>
+
+  <table class="reftable">
+    <tr><th>Old (overloaded)</th><th>Modern</th><th>What it does</th></tr>
+    <tr><td><code class="c">git checkout main</code></td><td><code class="c">git switch main</code></td><td>Move to a branch</td></tr>
+    <tr><td><code class="c">git checkout -b feat</code></td><td><code class="c">git switch -c feat</code></td><td>Create a branch + move to it</td></tr>
+    <tr><td><code class="c">git checkout a1b2c3d</code></td><td><code class="c">git switch --detach a1b2c3d</code></td><td>Detach onto a commit/tag</td></tr>
+    <tr><td><code class="c">git checkout -- file</code></td><td><code class="c">git restore file</code></td><td>Discard working-tree edits</td></tr>
+    <tr><td><code class="c">git checkout HEAD~2 -- file</code></td><td><code class="c">git restore --source=HEAD~2 file</code></td><td>Restore one file from history</td></tr>
+    <tr><td><code class="c">git reset HEAD file</code></td><td><code class="c">git restore --staged file</code></td><td>Unstage a file</td></tr>
+  </table>
+
+  <h2>6 · When to reach for which</h2>
+  <div class="callout">
+    <b>Ask one question: am I changing my <i>location</i> or my <i>files</i>?</b> If you want to <i>be somewhere else</i> — a different branch, a new branch, a specific commit — that's <code class="c">switch</code>. If you want <i>different file contents</i> — undo edits, unstage, or grab a file from the past — that's <code class="c">restore</code>. On git 2.23+ prefer the split forms: the verb states your intent, and you can no longer discard a file while reaching for a branch.
+  </div>
+
+  <div class="callout">
+    <b>See also.</b> <code class="c">switch</code> is just <a href="head-refs.html">HEAD</a> moving between branches; <code class="c">switch --detach</code> is how you land in a detached HEAD on purpose. <code class="c">restore --staged</code> is the file-scoped cousin of <a href="reset.html">reset</a>, and the unstaging half of the <a href="staging.html">staging area</a>. A mis-switch is recoverable via the <a href="reflog.html">reflog</a> — a mis-restore is not.
+  </div>
+
+  <footer>
+    Part of the <a href="index.html">git concepts</a> set · <a href="../git-guide.html">cheatsheet &amp; quiz</a> · self-contained, no network required
+  </footer>
+</div>
+<script>
+/* =========================================================================
+   Reusable animated commit-graph engine.
+   makeScene(rootEl, frames, opts) renders a stepper with an SVG-edged,
+   absolutely-positioned commit graph that animates between frames.
+
+   A frame = {
+     command:  "git merge feature"  // optional, shown in the command bar
+     narration:"<html>"            // optional, shown in the narration panel
+     todo:     "<html>"            // optional pre-formatted block
+     commits:  [ {id, col, row, kind, label} ]   kind: base|feat|new|ghost
+     edges:    [ [childId, parentId], ... ]   // merge commit = TWO parent edges
+     refs:     [ {name, at:commitId, kind:branch|head|tag, slot?} ]
+   }
+   Coordinates are grid cells; the engine converts col/row to pixels.
+   Single-frame scenes (opts.static) hide the controls.
+   ========================================================================= */
+function makeScene(root, frames, opts){
+  opts = opts || {};
+  const COLW = opts.colw || 92, ROWH = opts.rowh || 86, PAD = 42, R = 23;
+
+  const stage = el('div','stage');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  stage.appendChild(svg);
+  root.appendChild(stage);
+
+  const cmd = el('div','cmdbar empty'); root.appendChild(cmd);
+  const narr = el('div','narr'); root.appendChild(narr);
+  let todoEl = null;
+
+  let ctrl, prevB, nextB, counter;
+  if(!opts.static){
+    ctrl = el('div','ctrl');
+    prevB = btn('◀ Prev'); nextB = btn('Next ▶');
+    const restart = btn('↻ Restart'); restart.className='btn ghost';
+    counter = el('div','counter');
+    ctrl.append(prevB,nextB,restart,counter);
+    root.appendChild(ctrl);
+    prevB.onclick=()=>go(i-1); nextB.onclick=()=>go(i+1); restart.onclick=()=>go(0);
+  }
+
+  const nodes = {};   // id -> div
+  const refEls = {};  // name -> div
+  let i = 0;
+
+  function cx(c){ return PAD + c*COLW + R; }
+  function cy(r){ return PAD + r*ROWH + R; }
+
+  function render(frame){
+    // stage size
+    let maxC=0,maxR=0,minR=99; frame.commits.forEach(c=>{maxC=Math.max(maxC,c.col);maxR=Math.max(maxR,c.row);minR=Math.min(minR,c.row)});
+    const topStack={}; (frame.refs||[]).forEach(rf=>{const c=frame.commits.find(x=>x.id===rf.at); if(c){topStack[c.row]=(topStack[c.row]||0)+1;}});
+    const topRefRoom=Math.max(0, ((topStack[minR]||0)-1)*24);
+    const h = PAD*2 + maxR*ROWH + R*2 + 28 + topRefRoom;
+    stage.style.width = (PAD*2 + maxC*COLW + R*2) + 'px';
+    stage.style.height = h + 'px';
+    stage.style.minHeight = h + 'px';
+
+    // commits
+    const seen = new Set();
+    frame.commits.forEach(c=>{
+      let n = nodes[c.id];
+      if(!n){ n = el('div','node'); n.style.opacity='0'; stage.appendChild(n); nodes[c.id]=n; }
+      n.className = 'node '+(c.kind||'base');
+      n.textContent = c.label!==undefined ? c.label : c.id;
+      n.style.left = (cx(c.col)-R)+'px';
+      n.style.top  = (cy(c.row)-R)+'px';
+      requestAnimationFrame(()=>{ n.style.opacity='1'; });
+      seen.add(c.id);
+    });
+    Object.keys(nodes).forEach(id=>{ if(!seen.has(id)){ const n=nodes[id]; n.style.opacity='0'; setTimeout(()=>{n.remove();},380); delete nodes[id]; }});
+
+    // refs (stack multiple at same commit, plus slot offset)
+    const byCommit = {};
+    const seenRefs = new Set();
+    (frame.refs||[]).forEach(rf=>{
+      const c = frame.commits.find(x=>x.id===rf.at); if(!c) return;
+      byCommit[rf.at] = byCommit[rf.at]||0;
+      const order = byCommit[rf.at]++;
+      let e = refEls[rf.name];
+      if(!e){ e = el('div','ref'); e.style.opacity='0'; stage.appendChild(e); refEls[rf.name]=e; }
+      e.className = 'ref '+(rf.kind||'branch');
+      e.textContent = rf.kind==='head' ? 'HEAD'+(rf.name!=='HEAD'?' → '+rf.name:'') : rf.name;
+      e.style.left = cx(c.col)+'px';
+      e.style.top  = (cy(c.row) - R - 22 - order*24)+'px';
+      requestAnimationFrame(()=>{ e.style.opacity='1'; });
+      seenRefs.add(rf.name);
+    });
+    Object.keys(refEls).forEach(nm=>{ if(!seenRefs.has(nm)){ const e=refEls[nm]; e.style.opacity='0'; setTimeout(()=>{e.remove();},380); delete refEls[nm]; }});
+
+    // edges — follow the animating nodes for ~520ms
+    const start = performance.now();
+    function tick(now){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      const sb = stage.getBoundingClientRect();
+      (frame.edges||[]).forEach(([a,b])=>{
+        const na=nodes[a], nb=nodes[b]; if(!na||!nb) return;
+        const ra=na.getBoundingClientRect(), rb=nb.getBoundingClientRect();
+        const x1=ra.left-sb.left+ra.width/2, y1=ra.top-sb.top+ra.height/2;
+        const x2=rb.left-sb.left+rb.width/2, y2=rb.top-sb.top+rb.height/2;
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',x1);ln.setAttribute('y1',y1);ln.setAttribute('x2',x2);ln.setAttribute('y2',y2);
+        const ghost = (na.classList.contains('ghost')||nb.classList.contains('ghost'));
+        ln.setAttribute('stroke', ghost?'#3a3c42':'#52555e');
+        ln.setAttribute('stroke-width', ghost?'1.6':'2.2');
+        if(ghost) ln.setAttribute('stroke-dasharray','4 4');
+        svg.appendChild(ln);
+      });
+      if(now-start < 540) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // text panels
+    if(frame.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+frame.command; }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = frame.narration || '';
+    // todo block
+    if(todoEl){ todoEl.remove(); todoEl=null; }
+    if(frame.todo){ todoEl = el('div','todo'); todoEl.innerHTML = frame.todo; narr.after(todoEl); }
+  }
+
+  function go(n){
+    i = Math.max(0, Math.min(frames.length-1, n));
+    if(!opts.static){
+      prevB.disabled = i===0; nextB.disabled = i===frames.length-1;
+      counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    }
+    render(frames[i]);
+  }
+
+  go(0);
+  window.addEventListener('resize', ()=>render(frames[i]));
+  return { go };
+
+  function el(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+  function btn(label){const b=el('button','btn');b.textContent=label;return b;}
+}
+
+
+/* ---------------- Scene: switch moves HEAD ---------------- */
+makeScene(document.getElementById('scene-switch'), [
+  {
+    narration:'History: <b>main</b> at C, a <b>feature</b> branch built on top (D → E). HEAD is on <b>main</b>, so the commit you\'re sitting on is C.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'new',label:'C'},
+      {id:'D',col:3,row:0,kind:'base'},{id:'E',col:4,row:0,kind:'base'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','D']],
+    refs:[{name:'main',at:'C',kind:'head'},{name:'feature',at:'E',kind:'branch'}]
+  },
+  {
+    command:'git switch feature',
+    narration:'Nothing in history changed. The teal <b>HEAD</b> pill simply moved to <b>feature</b>, and your working tree now matches commit E. You relocated — that\'s all switch does.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:3,row:0,kind:'base'},{id:'E',col:4,row:0,kind:'new',label:'E'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','D']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'E',kind:'head'}]
+  },
+  {
+    command:'git switch -c hotfix',
+    narration:'<code class="c">-c</code> creates a new branch <b>hotfix</b> at your current commit and moves HEAD onto it in one step. Still no new commit — just a fresh pointer and HEAD following it.',
+    commits:[
+      {id:'A',col:0,row:1,kind:'base'},{id:'B',col:1,row:1,kind:'base'},{id:'C',col:2,row:1,kind:'base'},
+      {id:'D',col:3,row:0,kind:'base'},{id:'E',col:4,row:0,kind:'new',label:'E'}
+    ],
+    edges:[['B','A'],['C','B'],['D','C'],['E','D']],
+    refs:[{name:'main',at:'C',kind:'branch'},{name:'feature',at:'E',kind:'branch'},{name:'hotfix',at:'E',kind:'head'}]
+  }
+]);
+
+/* ---------------- Scene: restore changes files, not pointers ---------------- */
+makeScene(document.getElementById('scene-restore'), [
+  {
+    narration:'Clean, simple history: <b>main</b> at C, HEAD on it. Now imagine you edit <code class="c">file.txt</code> in your working tree and want those edits <i>gone</i>.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'new',label:'C'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  },
+  {
+    command:'git restore file.txt',
+    narration:'Watch the graph: <b>it didn\'t move.</b> HEAD, <b>main</b>, every commit — all exactly where they were. <code class="c">restore</code> only rewrote the file on disk back to match the index. Pointers untouched; files changed.',
+    commits:[
+      {id:'A',col:0,row:0,kind:'base'},{id:'B',col:1,row:0,kind:'base'},{id:'C',col:2,row:0,kind:'new',label:'C'}
+    ],
+    edges:[['B','A'],['C','B']],
+    refs:[{name:'main',at:'C',kind:'head'}]
+  }
+]);
+
+</script>
+</body>
+</html>
