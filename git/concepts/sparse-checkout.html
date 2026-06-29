@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding git sparse-checkout</title>
+<style>
+  :root{
+    --bg:#1a1b1e; --panel:#232428; --panel-2:#2b2d31; --border:#3a3c42;
+    --text:#e4e4e7; --muted:#9a9ba1; --accent:#5bc8af; --accent-dim:rgba(91,200,175,.14);
+    --base:#7fb2c8; --feat:#e0a86b; --new:#6fe0ab; --ghost:#5a5c63;
+    --key:#15161a; --purple:#c4a5f0;
+    --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;font-size:15px}
+  .wrap{max-width:940px;margin:0 auto;padding:38px 24px 90px}
+  a{color:var(--accent)}
+  .back{font-size:13px;color:var(--muted);text-decoration:none}
+  .back:hover{color:var(--text)}
+  h1{font-size:30px;margin:14px 0 4px;letter-spacing:-.5px;font-weight:650}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:15.5px}
+  h2{font-size:20px;margin:42px 0 6px;font-weight:620;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 4px;font-weight:600}
+  p{margin:10px 0}
+  code.c{font-family:var(--mono);background:var(--key);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px;color:var(--purple)}
+  kbd{font-family:var(--mono);font-size:12.5px;background:var(--key);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--accent)}
+  .lead{font-size:16.5px;color:var(--text)}
+  .muted{color:var(--muted)}
+
+  .callout{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:18px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--feat)}
+  .callout.warn b{color:var(--feat)}
+  .callout b{color:var(--text)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot-l{width:14px;height:14px;border-radius:50%;border:2px solid}
+  .dot-l.base{border-color:var(--base);background:#2b3a44}
+  .dot-l.new{border-color:var(--new);background:#22352c}
+  .dot-l.ghost{border-color:var(--ghost);background:transparent;border-style:dashed}
+
+  .ctrl{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#11201c;border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;font-family:var(--sans);cursor:pointer}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .counter{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .cmdbar{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:14px;color:var(--purple);min-height:38px;display:flex;align-items:center;gap:8px}
+  .cmdbar .prompt{color:var(--muted)}
+  .cmdbar.empty{color:var(--muted)}
+  .narr{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 15px;margin-top:12px;font-size:14px;min-height:54px}
+  .narr b{color:var(--accent)}
+  .todo{font-family:var(--mono);font-size:13px;background:var(--key);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;white-space:pre;overflow-x:auto;line-height:1.7}
+  .todo .cmt{color:var(--muted)}
+
+  .reveal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:4px 16px;margin:12px 0}
+  .reveal summary{cursor:pointer;font-weight:600;padding:10px 0;list-style:none}
+  .reveal summary::-webkit-details-marker{display:none}
+  .reveal summary::before{content:"▸ ";color:var(--accent)}
+  .reveal[open] summary::before{content:"▾ "}
+  .reveal .body{padding-bottom:12px;font-size:14px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:46px}
+
+  /* ---- scope table ---- */
+  table.scope{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  table.scope th,table.scope td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+  table.scope th{background:var(--panel-2);color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.5px}
+  table.scope td:first-child{white-space:nowrap;font-weight:600}
+  table.scope tr.hl td{background:var(--accent-dim)}
+  table.scope tr.hl td:first-child{color:var(--accent)}
+  table.scope code{font-family:var(--mono);font-size:12px;color:var(--purple)}
+
+  /* ---- sparse-filter flow diagram ---- */
+  .flow{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin:20px 0}
+  .lanes{display:grid;grid-template-columns:1fr 150px 1fr;gap:14px;align-items:stretch}
+  @media(max-width:680px){.lanes{grid-template-columns:1fr}.counter{margin-left:0}}
+  .lane{background:var(--panel-2);border:1.5px solid var(--border);border-radius:12px;padding:13px 14px;min-width:0}
+  .lane.disk{border-color:var(--base)}
+  .lane .ttl{font-weight:650;font-size:13px;color:var(--text)}
+  .lane .ttl .sm{font-weight:400;color:var(--muted);font-size:11.5px;display:block;margin-top:1px}
+  .files{margin-top:11px;display:flex;flex-direction:column;gap:6px}
+  .f{font-family:var(--mono);font-size:12px;border-radius:6px;padding:5px 9px;border:1px solid var(--border);background:var(--key);color:var(--text);transition:opacity .35s ease,border-color .3s,background .3s,color .3s,transform .35s ease}
+  .f.kept{border-color:var(--new);background:#1f352b;color:#a6ecca}
+  .f.excluded{opacity:.32;border-style:dashed;color:var(--muted)}
+  .f.gone{opacity:0;transform:translateX(10px);pointer-events:none;height:0;padding:0;margin:0;border:0}
+  .f.attempt{border-color:var(--feat);background:#3a2e22;color:#f0cb9c}
+  /* filter lane */
+  .filterbox{align-self:center;text-align:center}
+  .filterchip{font-family:var(--mono);font-size:11.5px;border-radius:8px;padding:8px 10px;border:1.5px dashed var(--ghost);background:var(--key);color:var(--muted);transition:all .35s ease}
+  .filterchip.on{border-style:solid;border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+  .filterchip .state{display:block;font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;color:var(--muted)}
+  .filterchip.on .state{color:var(--accent)}
+  .arrowlbl{font-size:18px;color:var(--ghost);text-align:center;margin:8px 0 2px;transition:color .3s}
+  .filterchip.on ~ .arrowlbl{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Git concepts</a>
+  <h1>Understanding <span class="dot">git sparse-checkout</span></h1>
+  <p class="sub">The branch still holds <b>every</b> file. Sparse-checkout just filters which ones get written to disk — and the switch is <b>per-worktree</b>, not per-repo.</p>
+
+  <p class="lead">Sparse-checkout tells git one thing: <i>"only write a <b>subset</b> of the branch's files onto disk, ignore the rest."</i> The branch's history is untouched — it still contains every file in every commit. Git simply <b>filters</b> which of those files materialise in your working directory. A file can be fully present in history yet invisible on disk because the filter excludes it. That isn't corruption; that's the feature working.</p>
+
+  <div class="legend">
+    <span><span class="dot-l base"></span> a file written to disk</span>
+    <span><span class="dot-l new"></span> kept by the filter</span>
+    <span><span class="dot-l ghost"></span> in history, excluded from disk</span>
+  </div>
+
+  <h2>1 · The one-line idea: a filter in the middle</h2>
+  <p>Think of three layers, with the sparse filter sitting between what git <i>stores</i> and what you <i>see</i>:</p>
+
+  <table class="scope">
+    <thead><tr><th>Layer</th><th>Holds</th></tr></thead>
+    <tbody>
+      <tr><td>Branch history <span class="muted">(in <code>.git</code>)</span></td><td>every file, all commits — complete and untouched</td></tr>
+      <tr class="hl"><td>Sparse filter</td><td>a list of path patterns to keep</td></tr>
+      <tr><td>Working directory <span class="muted">(on disk)</span></td><td>only the files matching the filter</td></tr>
+    </tbody>
+  </table>
+
+  <p>Step through what the filter does to the same branch — toggling it on doesn't change a single commit, only what lands on disk:</p>
+
+  <div class="flow" id="flow">
+    <div class="lanes">
+      <div class="lane">
+        <div class="ttl">Branch history <span class="sm">.git — always complete</span></div>
+        <div class="files">
+          <div class="f" data-h="src/app.js">src/app.js</div>
+          <div class="f" data-h="src/lib.js">src/lib.js</div>
+          <div class="f" data-h="docs/guide.md">docs/guide.md</div>
+          <div class="f" data-h="README.md">README.md</div>
+          <div class="f" data-h=".beads/issues.db">.beads/issues.db</div>
+        </div>
+      </div>
+      <div class="filterbox">
+        <div class="filterchip" id="filterchip"><span class="state" id="filterstate">filter off</span><span id="filterpat">(everything)</span></div>
+        <div class="arrowlbl">→</div>
+      </div>
+      <div class="lane disk">
+        <div class="ttl">Working directory <span class="sm">on disk — what you see</span></div>
+        <div class="files">
+          <div class="f" data-d="src/app.js">src/app.js</div>
+          <div class="f" data-d="src/lib.js">src/lib.js</div>
+          <div class="f" data-d="docs/guide.md">docs/guide.md</div>
+          <div class="f" data-d="README.md">README.md</div>
+          <div class="f" data-d=".beads/issues.db">.beads/issues.db</div>
+        </div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <button class="btn" id="fl-prev" disabled>◀ Prev</button>
+      <button class="btn" id="fl-next">Next ▶</button>
+      <button class="btn ghost" id="fl-restart">↻ Restart</button>
+      <span class="counter" id="fl-counter"></span>
+    </div>
+    <div class="cmdbar empty" id="fl-cmd">(no command yet)</div>
+    <div class="narr" id="fl-narr"></div>
+  </div>
+
+  <div class="callout">
+    <b>The one sentence to remember.</b> Sparse-checkout is a <i>checkout-level</i> filter, never a <i>history-level</i> edit. Your commits keep every file; only the set of files written into the working directory shrinks. Turn the filter off and the missing files reappear instantly — nothing was ever deleted.
+  </div>
+
+  <h2>2 · Is it repo-level? No — it's per-worktree</h2>
+  <p>This is the subtlety that trips people up. Both the on/off switch (<code class="c">core.sparseCheckout</code>) and the pattern list can live in a <b>single worktree's private config</b>, not the shared repo config. That is why one worktree of a repo can be filtered down to a sliver while another worktree of the <i>same</i> repo sees the full tree.</p>
+
+  <table class="scope">
+    <thead><tr><th>Config scope</th><th>Where it lives</th><th>Shared by</th></tr></thead>
+    <tbody>
+      <tr><td>System</td><td><code>/etc/gitconfig</code></td><td>every repo on the machine</td></tr>
+      <tr><td>Global <span class="muted">(user)</span></td><td><code>~/.gitconfig</code></td><td>all your repos</td></tr>
+      <tr><td>Repo <span class="muted">(local)</span></td><td><code>.git/config</code></td><td>all worktrees of this repo</td></tr>
+      <tr class="hl"><td>Worktree</td><td><code>.git/worktrees/&lt;name&gt;/config.worktree</code></td><td>just that one worktree</td></tr>
+    </tbody>
+  </table>
+
+  <p>Sparse-checkout uses the bottom row. Unlocking that per-worktree layer requires turning on a repo extension:</p>
+  <div class="todo"><span class="cmt"># let each worktree carry its own config (needed for per-worktree sparse)</span>
+git config extensions.worktreeConfig true</div>
+  <p>Without worktrees in play, <code class="c">core.sparseCheckout</code> simply sits in <code class="c">.git/config</code> and filters that repo's single working copy. Either way the rule holds: it's always <b>"checkout level," never "history level"</b> — your commits are never touched.</p>
+
+  <div class="callout">
+    <b>Why it has to be per-worktree.</b> Worktrees already share one object store and one set of refs (see <a href="worktree.html">git worktree</a>). The <i>only</i> things that are private to each worktree are its files on disk, its index, and its HEAD. "Which files to write to disk" is exactly that kind of per-checkout decision — so the sparse filter belongs in the worktree's own <code class="c">config.worktree</code>, right alongside the rest of its private state.
+  </div>
+
+  <h2>3 · A real example: the <code class="c">beads-sync</code> worktree</h2>
+  <p>In one repo, a linked worktree called <code class="c">beads-sync</code> exists for a single purpose — to commit the <code class="c">.beads/</code> state folder. So it's filtered down to just that one path, while the main worktree keeps the whole tree:</p>
+  <div class="todo"><span class="cmt"># inside .git/worktrees/beads-sync/</span>
+config.worktree      →  [core] sparseCheckout = true
+info/sparse-checkout →  /.beads/
+
+<span class="cmt"># result on disk in that worktree</span>
+$ ls -A
+.beads   .git          <span class="cmt"># nothing else from the branch</span></div>
+
+  <p>The proof that it's per-worktree is that the <i>same command gives a different answer depending on which worktree you run it from</i>:</p>
+  <div class="todo"><span class="cmt"># from the MAIN worktree (not sparse)</span>
+$ git sparse-checkout list
+fatal: this worktree is not sparse
+
+<span class="cmt"># from the beads-sync worktree (sparse)</span>
+$ git sparse-checkout list
+/.beads/</div>
+  <p class="muted" style="font-size:13.5px">Same repo, same shared history, two different answers — because the filter lives in each worktree's own config, not the repo's.</p>
+
+  <h2>4 · The gotcha: a missing file that isn't missing</h2>
+  <p>When a tool tries to write a file <i>outside</i> the filtered paths in a sparse worktree, it looks like the write failed or the file vanished. Step 3 of the diagram above shows exactly this: an attempt to write <code class="c">src/app.js</code> in a worktree filtered to <code class="c">/.beads/</code>. The file isn't missing — the sparse filter is excluding that path on purpose.</p>
+
+  <div class="callout warn">
+    <b>Don't force it as a first move.</b> Reaching for <code class="c">git checkout --ignore-skip-worktree-bits</code> or reapplying patterns is the wrong reflex. First <i>read the filter</i> to understand why the path is excluded — the exclusion is usually intentional.
+  </div>
+
+  <p>The two commands that tell you what's going on:</p>
+  <div class="todo">git config core.sparseCheckout   <span class="cmt"># true / false — is the filter on?</span>
+git sparse-checkout list         <span class="cmt"># show the active patterns</span></div>
+  <p>The fix is almost always to <b>work inside the allowed paths</b>, or to do the work in the correct (non-sparse) worktree instead — not to fight the filter.</p>
+
+  <h2>Check your understanding</h2>
+  <details class="reveal"><summary>A file is in the branch's history but not on disk in your worktree. Is the repo corrupt?</summary>
+    <div class="body">No — that's sparse-checkout working as designed. History in <code class="c">.git</code> still holds every file; the sparse filter is just excluding that path from the working directory. Turn the filter off (or add the path to the pattern list) and the file reappears immediately. Nothing was deleted.</div></details>
+  <details class="reveal"><summary>You run <code class="c">git sparse-checkout list</code> in two worktrees of the same repo and get different output. Bug?</summary>
+    <div class="body">No. Sparse-checkout is configured <i>per-worktree</i> — the switch and pattern list live in each worktree's own <code class="c">.git/worktrees/&lt;name&gt;/config.worktree</code>, not the shared <code class="c">.git/config</code>. One worktree can be filtered (returns its patterns) while another isn't sparse at all (returns <code class="c">fatal: this worktree is not sparse</code>). Same repo, same history, different filter.</div></details>
+  <details class="reveal"><summary>A tool reports it can't write <code class="c">src/app.js</code> in a worktree filtered to <code class="c">/.beads/</code>. What's the right first step?</summary>
+    <div class="body">Diagnose before forcing. Run <code class="c">git config core.sparseCheckout</code> (is the filter on?) and <code class="c">git sparse-checkout list</code> (what does it keep?). You'll see the path is excluded on purpose. The fix is to work inside the allowed paths, or switch to the correct non-sparse worktree — not <code class="c">--ignore-skip-worktree-bits</code>.</div></details>
+  <details class="reveal"><summary>Does sparse-checkout change your commits or branch history?</summary>
+    <div class="body">Never. It's strictly checkout-level: it decides which files get written to the working directory, nothing more. Commits, trees, and blobs in the object store are untouched, and so is every other worktree that doesn't share the filter. It's a view, not an edit.</div></details>
+
+  <div class="callout">
+    <b>Related:</b> sparse-checkout makes the most sense once worktrees click — see <a href="worktree.html">git worktree</a> for the shared-object-store model that explains <i>why</i> the filter is per-worktree.
+  </div>
+
+  <footer>Part of the Git concepts set · step through the diagram, then read the callouts.</footer>
+</div>
+
+<script>
+/* ---- sparse-filter flow stepper (plain divs, reuses the design tokens) ---- */
+(function(){
+  const ALL = ['src/app.js','src/lib.js','docs/guide.md','README.md','.beads/issues.db'];
+  const frames = [
+    {
+      filter:null,
+      keep:ALL,           // all present, none highlighted as "kept" (no filter to credit)
+      plainDisk:true,
+      narration:'<b>Filter off.</b> A normal checkout: every file in the branch is written to disk. History and working directory show the same set. This is the default — sparse-checkout simply hasn\'t been turned on yet.'
+    },
+    {
+      command:'git sparse-checkout set /.beads/',
+      filter:'/.beads/',
+      keep:['.beads/issues.db'],
+      narration:'<b>Filter on.</b> You set a single pattern, <code class="c">/.beads/</code>. History is <i>unchanged</i> — still all five files. But the working directory now writes only the matching path; <code class="c">src/</code>, <code class="c">docs/</code> and <code class="c">README.md</code> are dropped from disk (greyed). No commit was edited.'
+    },
+    {
+      command:'$ echo "x" >> src/app.js   # in the sparse worktree',
+      filter:'/.beads/',
+      keep:['.beads/issues.db'],
+      attempt:'src/app.js',
+      narration:'<b>The gotcha.</b> A tool tries to touch <code class="c">src/app.js</code> — a path the filter excludes. It looks like the file "vanished" or the write failed. It didn\'t: the file is alive in history, the filter just won\'t materialise it on disk. Read the filter with <code class="c">git sparse-checkout list</code> before forcing anything.'
+    }
+  ];
+
+  let i = 0;
+  const chip = document.getElementById('filterchip');
+  const state = document.getElementById('filterstate');
+  const pat = document.getElementById('filterpat');
+  const cmd = document.getElementById('fl-cmd');
+  const narr = document.getElementById('fl-narr');
+  const counter = document.getElementById('fl-counter');
+  const prev = document.getElementById('fl-prev');
+  const next = document.getElementById('fl-next');
+  const restart = document.getElementById('fl-restart');
+
+  function render(){
+    const f = frames[i];
+    // filter chip
+    if(f.filter){ chip.className='filterchip on'; state.textContent='filter on'; pat.textContent=f.filter; }
+    else { chip.className='filterchip'; state.textContent='filter off'; pat.textContent='(everything)'; }
+    // history lane: always all present, neutral
+    ALL.forEach(name=>{
+      const h = document.querySelector('#flow [data-h="'+name+'"]');
+      if(h) h.className='f';
+    });
+    // disk lane
+    ALL.forEach(name=>{
+      const d = document.querySelector('#flow [data-d="'+name+'"]');
+      if(!d) return;
+      const kept = f.keep.includes(name);
+      if(f.attempt===name){ d.className='f attempt'; }
+      else if(f.plainDisk){ d.className='f'; }
+      else if(kept){ d.className='f kept'; }
+      else { d.className='f excluded'; }
+    });
+    // panels
+    if(f.command){ cmd.className='cmdbar'; cmd.innerHTML='<span class="prompt">$</span> '+f.command.replace(/^\$\s*/,''); }
+    else { cmd.className='cmdbar empty'; cmd.textContent='(no command yet)'; }
+    narr.innerHTML = f.narration||'';
+    counter.textContent = 'Step '+(i+1)+' / '+frames.length;
+    prev.disabled = i===0; next.disabled = i===frames.length-1;
+  }
+  prev.onclick=()=>{ i=Math.max(0,i-1); render(); };
+  next.onclick=()=>{ i=Math.min(frames.length-1,i+1); render(); };
+  restart.onclick=()=>{ i=0; render(); };
+  render();
+})();
+</script>
+</body>
+</html>

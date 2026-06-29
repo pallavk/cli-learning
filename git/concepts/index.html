@@ -191,6 +191,14 @@
       <div class="tags"><span class="tag">switch vs restore</span><span class="tag">moves HEAD</span><span class="tag">no undo on restore</span></div>
     </a>
 
+    <a class="card" href="sparse-checkout.html">
+      <div class="num">16</div>
+      <h3>Sparse-checkout<span class="arrow">→</span></h3>
+      <p class="desc">A filter between history and disk: the branch keeps <i>every</i> file, but only the paths you list get written to the working directory. And the switch is <b>per-worktree</b>, not per-repo.</p>
+      <div class="hard"><b>Why it's hard:</b> a file present in history but missing on disk looks like corruption — it's the filter working. And the same <code class="c">sparse-checkout list</code> gives different answers in different worktrees.</div>
+      <div class="tags"><span class="tag">checkout level, not history</span><span class="tag">per-worktree config</span><span class="tag">missing ≠ gone</span></div>
+    </a>
+
   </div>
 
   <div class="note" style="border-left-color:var(--feat);margin-top:34px">
